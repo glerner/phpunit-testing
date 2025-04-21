@@ -1,4 +1,5 @@
-# WordPress PHPUnit Testing Framework
+# GL WordPress PHPUnit Testing Framework
+by George Lerner, GitHub https://github.com/glerner/
 
 A modular, reusable testing framework for WordPress plugins and themes that provides a structured approach to PHPUnit testing.
 
@@ -28,14 +29,14 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ```bash
 # From your plugin's root directory
-git submodule add https://github.com/yourusername/phpunit-testing.git tests/framework
+git submodule add https://github.com/glerner/phpunit-testing.git tests/framework
 ```
 
 ### Option 2: Composer Package (Recommended for Standard Usage)
 
 ```bash
 # From your plugin's root directory
-composer require yourusername/phpunit-testing --dev
+composer require glerner/phpunit-testing --dev
 ```
 
 ## Usage
