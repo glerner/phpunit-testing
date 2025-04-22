@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<ruleset name="GL WordPress PHPUnit Testing Framework">
+    <description>Coding standards for GL WordPress PHPUnit Testing Framework</description>
+
+    <!-- Scan all files in directory -->
+    <file>.</file>
+
+    <!-- Scan only PHP files -->
+    <arg name="extensions" value="php"/>
+
+    <!-- Show colors in console -->
+    <arg value="-colors"/>
+
+    <!-- Show sniff codes in all reports -->
+    <arg value="ns"/>
+
+    <!-- Exclude paths -->
+    <exclude-pattern>/vendor/*</exclude-pattern>
+    <exclude-pattern>/node_modules/*</exclude-pattern>
+    <exclude-pattern>/tests/bootstrap/*</exclude-pattern>
+    <exclude-pattern>/build/*</exclude-pattern>
+
+    <!-- Include WordPress Coding Standards -->
+    <rule ref="WordPress">
+        <!-- Exclude WordPress-specific rules that don't apply to a library -->
+        <exclude name="WordPress.Files.FileName"/>
+        <exclude name="WordPress.WP.I18n"/>
+        <exclude name="WordPress.WP.GlobalVariablesOverride"/>
+    </rule>
+
+    <!-- Include PSR-12 Coding Standards -->
+    <rule ref="PSR12">
+        <!-- Any PSR12 exclusions would go here -->
+    </rule>
+
+    <!-- Include PHPCompatibility -->
+    <rule ref="PHPCompatibilityWP"/>
+
+    <!-- Check for PHP cross-version compatibility -->
+    <config name="testVersion" value="7.4-"/>
+
+    <!-- Set minimum supported WP version -->
+    <config name="minimum_supported_wp_version" value="5.6"/>
+
+    <!-- Set text domain -->
+    <config name="text_domain" value="gl-phpunit-testing"/>
+
+    <!-- Custom Rules -->
+    <rule ref="Squiz.Commenting.FunctionComment" />
+    <rule ref="Squiz.Commenting.FunctionCommentThrowTag" />
+    <rule ref="Squiz.Commenting.ClassComment" />
+    <rule ref="Generic.Commenting.DocComment" />
+
+    <!-- Enforce type hints -->
+    <rule ref="SlevomatCodingStandard.TypeHints.ParameterTypeHint">
+        <exclude name="SlevomatCodingStandard.TypeHints.ParameterTypeHint.MissingTraversableTypeHintSpecification"/>
+    </rule>
+    <rule ref="SlevomatCodingStandard.TypeHints.ReturnTypeHint">
+        <exclude name="SlevomatCodingStandard.TypeHints.ReturnTypeHint.MissingTraversableTypeHintSpecification"/>
+    </rule>
+</ruleset>

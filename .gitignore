@@ -1,0 +1,69 @@
+# Dependencies
+/vendor/
+/node_modules/
+/composer.lock
+/package-lock.json
+/npm-debug.log
+
+# PHPUnit
+/build/
+/dist/
+/.phpunit.result.cache
+/phpunit.xml
+# Keep phpunit.xml.dist and other .dist files
+
+# PHP_CodeSniffer
+/.phpcs.cache
+/phpcs.xml
+# Keep phpcs.xml.dist
+
+# PHPStan
+/phpstan.neon
+# Keep phpstan.neon.dist
+
+# IDE & OS specific files
+.idea/
+.vscode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.windsurfrules
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# WordPress test library (for integration tests)
+/tmp/
+/wordpress/
+/wp-content/
+
+# Test artifacts
+/coverage/
+/clover.xml
+/.coverage/
+.prompt_shown
+
+# Test analysis temporary files
+analyze_test_files.txt
+mapping_test_files.txt
+interface_fixes_results.txt
+fix_interface_references.sh
+test_files_to_analyze.txt
+untested_files.txt
+test_processing_progress*.txt
+test_analysis_results*.txt
+
+# Environment files
+.env
+.env.*
+!.env.sample.testing
+
+# Temporary files
+*.log
+*.cache
+*.tmp
+junk.txt
+
+# Keep all configuration templates (*.dist files)
+!*.dist

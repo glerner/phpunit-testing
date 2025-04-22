@@ -64,9 +64,45 @@ This guide walks through the process of creating a local Git repository and conn
    - Select scopes:
      - At minimum, check `repo` for repository access
      - Add other scopes as needed (e.g., `workflow` for GitHub Actions)
+
+     **Recommended Scopes for WordPress Developers:**
+     - `repo` - Full control of private repositories (includes all repo sub-scopes)
+     - `workflow` - If using GitHub Actions for CI/CD or deployments
+     - `read:packages` - If consuming GitHub packages
+
+     **Recommended Scopes for Small Teams:**
+     - Consider using fine-grained tokens instead of classic tokens
+     - If using classic tokens, limit to specific repositories when possible
+     - For organization-wide access: `repo`, `workflow`, `read:org`
+
    - Click "Generate token"
    - **IMPORTANT**: Copy the token immediately - you won't be able to see it again!
    - Store the token securely (e.g., in a password manager like Bitwarden, LastPass, or iPassword)
+
+   ### Personal Access Token Strategy
+
+   You have two main options for managing Personal Access Tokens:
+
+   #### Option 1: Single PAT for All Repositories (Simpler)
+   - **Pros**: Easier to manage, only need to remember/update one token
+   - **Cons**: If compromised, attacker gains access to all your repositories
+   - **Best for**: Individual developers or small teams with trusted environments
+   - **Implementation**: Use a single token with appropriate scopes for all your repositories
+   - **Storage**: Save in your global Git credential helper
+
+   #### Option 2: Separate PATs per Project or Project Group (More Secure)
+   - **Pros**: Better security through isolation, limits potential damage if compromised
+   - **Cons**: More tokens to manage and update when they expire
+   - **Best for**: Sensitive projects, team environments, or professional settings
+   - **Implementation**: Create tokens with names like "Project X Access" with minimal required scopes
+   - **Storage**: Store in project-specific credential files or use different credential helpers, or store each in your Password Keeper software to paste each time
+
+   #### Security Best Practices
+   - Always set an expiration date (30-90 days recommended)
+   - Use the minimum required scopes for each token
+   - Never commit tokens to your repository
+   - Regularly audit and revoke unused tokens
+   - Consider using GitHub's fine-grained tokens for more granular control
 
 2. Add the GitHub repository as a remote:
    ```bash
@@ -82,10 +118,79 @@ This guide walks through the process of creating a local Git repository and conn
    git push -u origin main
    ```
    - When prompted, use your GitHub username and your Personal Access Token as the password
+   - The `-u` (or `--set-upstream`) flag sets up tracking between your local and remote branches
+   - This only needs to be done once; after this, you can simply use `git push` for future pushes
+   - The tracking information is stored in your `.git/config` file
 
 4. Verify your repository settings:
    ```bash
    git config --list
+
+   # To see where each setting comes from (global vs. local)
+   git config --list --show-origin --show-scope
+   ```
+
+   ### Recommended Git Configuration
+
+   #### Global Settings (in `~/.gitconfig`)
+
+   These settings should be applied globally as they apply to all repositories:
+
+   ```bash
+   # Identity settings
+   git config --global user.name "Your Name"
+   git config --global user.email "your.email@example.com"
+
+   # Credential helper to avoid typing your password repeatedly
+   git config --global credential.helper store
+
+   # Default pull behavior (prevents unintended merges)
+   git config --global pull.rebase true
+
+   # Enable helpful coloring in Git output
+   git config --global color.ui auto
+
+   # Line ending normalization
+   git config --global core.autocrlf input  # For Linux/Mac
+   # git config --global core.autocrlf true # For Windows
+   ```
+
+   #### Local Settings (in `.git/config`)
+
+   These settings are automatically created for each repository or should be set per-project:
+
+   ```ini
+   [core]
+   	repositoryformatversion = 0
+   	filemode = true
+   	bare = false
+   	logallrefupdates = true
+   [remote "origin"]
+   	url = https://github.com/username/repository.git
+   	fetch = +refs/heads/*:refs/remotes/origin/*
+   [branch "main"]
+   	remote = origin
+   	merge = refs/heads/main
+   ```
+
+   ### Checking Your Configuration
+
+   A properly configured repository will show both global and local settings:
+
+   ```
+   global  file:/home/username/.gitconfig    user.name=Your Name
+   global  file:/home/username/.gitconfig    user.email=your.email@example.com
+   global  file:/home/username/.gitconfig    credential.helper=store
+   global  file:/home/username/.gitconfig    pull.rebase=true
+   global  file:/home/username/.gitconfig    color.ui=auto
+   local   file:.git/config                  core.repositoryformatversion=0
+   local   file:.git/config                  core.filemode=true
+   local   file:.git/config                  core.bare=false
+   local   file:.git/config                  core.logallrefupdates=true
+   local   file:.git/config                  remote.origin.url=https://github.com/username/repository.git
+   local   file:.git/config                  remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+   local   file:.git/config                  branch.main.remote=origin
+   local   file:.git/config                  branch.main.merge=refs/heads/main
    ```
 
 ## Daily Workflow

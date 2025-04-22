@@ -15,6 +15,7 @@ This tutorial provides a comprehensive guide to setting up and organizing PHPUni
 - [Managing Test Dependencies](#managing-test-dependencies)
 - [Continuous Integration Setup](#continuous-integration-setup)
 - [Test Analysis and Maintenance](#test-analysis-and-maintenance)
+- [Contributing](#contributing)
 
 ## Test Types and When to Use Each
 
@@ -534,6 +535,44 @@ Regularly review and maintain your test suite:
 4. **Code Quality Metrics**: Use tools like PHPStan to analyze test code quality
 5. **PHPDoc Completeness**: Check for complete PHPDoc annotations (@covers, etc.)
 6. **Test Isolation**: Analyze potential test isolation issues
+
+## Contributing
+
+We welcome contributions to improve this testing framework and documentation. For detailed guidelines on how to contribute, please refer to the [CONTRIBUTING.md](../../CONTRIBUTING.md) file in the root of this repository.
+
+### Coding Standards
+
+This project follows PSR-12 coding standards and WordPress coding standards where appropriate. When contributing code, please ensure your contributions adhere to these standards.
+
+#### Fixing Coding Standards Issues
+
+We use PHP_CodeSniffer to enforce coding standards. You can check and fix coding standards issues with:
+
+```bash
+# Check coding standards
+composer run-script phpcs
+
+# Fix coding standards issues automatically where possible
+composer run-script phpcbf
+```
+
+> **Note:** Using Composer's phpcbf command works more reliably than trying to install and configure Visual Studio Code extensions for PHP code formatting. The command-line approach ensures consistent formatting across all development environments.
+
+Common issues to watch for:
+- Indentation (4 spaces, not tabs)
+- Line length (generally 100 characters max)
+- Proper spacing around operators
+- Proper docblock formatting
+- Naming conventions
+
+### Testing Your Contributions
+
+Before submitting a pull request, please ensure:
+
+1. All tests pass
+2. Your code follows the project's coding standards
+3. You've added tests for any new functionality
+4. Documentation is updated if necessary
 
 ---
 

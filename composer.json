@@ -1,0 +1,53 @@
+{
+    "name": "glerner/phpunit-testing",
+    "description": "A modular, reusable PHPUnit testing framework for WordPress plugin development",
+    "type": "library",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "George Lerner",
+            "email": "george.lerner@example.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "10up/wp_mock": "^0.4",
+        "brain/monkey": "^2.6",
+        "mockery/mockery": "^1.4",
+        "squizlabs/php_codesniffer": "^3.6",
+        "dealerdirect/phpcodesniffer-composer-installer": "^0.7.0",
+        "wp-coding-standards/wpcs": "^2.3",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
+        "yoast/phpunit-polyfills": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "GL\\Testing\\Framework\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "GL\\Testing\\Framework\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit -c config/phpunit.xml.dist",
+        "test:unit": "phpunit -c config/phpunit-unit.xml.dist",
+        "test:wp-mock": "phpunit -c config/phpunit-wp-mock.xml.dist",
+        "test:integration": "phpunit -c config/phpunit-integration.xml.dist",
+        "test:framework": "phpunit -c config/phpunit-framework-tests.xml.dist",
+        "phpcs": "phpcs --standard=phpcs.xml.dist",
+        "phpcbf": "phpcbf --standard=phpcs.xml.dist",
+        "analyze": "phpstan analyse"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
+}

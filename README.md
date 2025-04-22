@@ -1,6 +1,8 @@
 # GL WordPress PHPUnit Testing Framework
 by George Lerner, GitHub https://github.com/glerner/
 
+Repository: https://github.com/glerner/phpunit-testing.git
+
 A modular, reusable testing framework for WordPress plugins and themes that provides a structured approach to PHPUnit testing.
 
 ## Overview
