@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<phpunit
+    bootstrap="../tests/bootstrap/bootstrap.php"
+    backupGlobals="false"
+    colors="true"
+    convertErrorsToExceptions="true"
+    convertNoticesToExceptions="true"
+    convertWarningsToExceptions="true"
+    >
+    <testsuites>
+        <testsuite name="framework">
+            <directory suffix=".php">../tests/framework/unit</directory>
+            <directory suffix=".php">../tests/framework/wp-mock</directory>
+            <directory suffix=".php">../tests/framework/integration</directory>
+        </testsuite>
+    </testsuites>
+    <filter>
+        <whitelist>
+            <directory suffix=".php">../src</directory>
+        </whitelist>
+    </filter>
+    <php>
+        <env name="TEST_TYPE" value="unit" />
+    </php>
+</phpunit>

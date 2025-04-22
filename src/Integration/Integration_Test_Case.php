@@ -11,14 +11,19 @@ declare(strict_types=1);
 
 namespace GL\Testing\Framework\Integration;
 
-use WP_UnitTestCase;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
+
+// Use the stub WP_UnitTestCase during development, but use the real one in WordPress
+if (!class_exists('WP_UnitTestCase')) {
+    // For development and static analysis
+    require_once dirname(__DIR__) . '/Stubs/WP_UnitTestCase.php';
+}
 
 /**
  * Base Test Case class for WordPress integration tests
  * Extends WP_UnitTestCase to provide full WordPress test environment
  */
-class Integration_Test_Case extends WP_UnitTestCase {
+class Integration_Test_Case extends \WP_UnitTestCase {
     use MockeryPHPUnitIntegration;
 
     /**

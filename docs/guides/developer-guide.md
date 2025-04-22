@@ -118,7 +118,52 @@ cp vendor/glerner/phpunit-testing/config/phpunit*.xml.dist .
 
 Modify the configuration files to match your plugin's structure.
 
-### 3. Create Test Classes
+### 3. Using with Lando WordPress
+
+If you're using Lando for WordPress development, the framework includes scripts to sync the testing framework to your WordPress environment and run tests there.
+
+First, set up your environment variables:
+
+```bash
+# Set up environment variables in .env.testing
+cp .env.sample.testing .env.testing
+
+# Edit .env.testing to match your Lando environment
+# Especially set the correct paths:
+# FILESYSTEM_WP_ROOT=/app
+# WP_TESTS_DIR=/app/wp-content/plugins/wordpress-develop/tests/phpunit
+```
+
+#### Option 1: Running from inside Lando (Recommended)
+
+The most reliable way to sync and test is to run commands inside the Lando environment:
+
+```bash
+# Sync the framework to your WordPress environment
+composer lando:sync
+
+# Run tests in the WordPress environment
+composer lando:test
+```
+
+#### Option 2: Running from your local environment
+
+Alternatively, you can try running from your local environment, but this may encounter permission issues:
+
+```bash
+# Sync the framework to your WordPress environment
+composer sync:wp
+
+# Run tests in the WordPress environment
+composer wp:test
+```
+
+This process will:
+1. Sync the framework files to your WordPress plugins directory
+2. Set up the WordPress test environment if needed
+3. Run tests in the WordPress environment
+
+### 4. Create Test Classes
 
 Copy and adapt the example templates for your plugin:
 
@@ -134,7 +179,7 @@ cp vendor/glerner/phpunit-testing/templates/integration/Example_Integration_Test
 
 Modify the test files to match your plugin's structure and functionality.
 
-### 4. Run Tests
+### 5. Run Tests
 
 ```bash
 # Run all tests

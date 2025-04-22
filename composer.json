@@ -1,6 +1,7 @@
 {
     "name": "glerner/phpunit-testing",
     "description": "A modular, reusable PHPUnit testing framework for WordPress plugin development",
+    "version": "v1.0.0",
     "type": "library",
     "license": "GPL-2.0-or-later",
     "authors": [
@@ -11,10 +12,10 @@
     ],
     "minimum-stability": "stable",
     "require": {
-        "php": ">=7.4"
+        "php": ">=8.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "^9.0",
+        "phpunit/phpunit": "^10.0",
         "10up/wp_mock": "^0.4",
         "brain/monkey": "^2.6",
         "mockery/mockery": "^1.4",
@@ -22,7 +23,9 @@
         "dealerdirect/phpcodesniffer-composer-installer": "^0.7.0",
         "wp-coding-standards/wpcs": "^2.3",
         "phpcompatibility/phpcompatibility-wp": "^2.1",
-        "yoast/phpunit-polyfills": "^1.0"
+        "yoast/phpunit-polyfills": "^1.0",
+        "phpstan/phpstan": "^1.10",
+        "szepeviktor/phpstan-wordpress": "^1.3"
     },
     "autoload": {
         "psr-4": {
@@ -42,7 +45,11 @@
         "test:framework": "phpunit -c config/phpunit-framework-tests.xml.dist",
         "phpcs": "phpcs --standard=phpcs.xml.dist",
         "phpcbf": "phpcbf --standard=phpcs.xml.dist",
-        "analyze": "phpstan analyse"
+        "analyze": "vendor/bin/phpstan analyse --configuration=phpstan.neon",
+        "sync:wp": "php bin/sync-to-wp.php",
+        "wp:test": "SETUP_WP_TESTS=true php bin/sync-to-wp.php",
+        "lando:sync": "lando ssh -c 'mkdir -p /app/wp-content/plugins/gl-phpunit-testing-framework && cd /app && php /app/wp-content/plugins/gl-phpunit-testing-framework/bin/sync-to-wp.php'",
+        "lando:test": "lando ssh -c 'cd /app/wp-content/plugins/gl-phpunit-testing-framework && composer test'"
     },
     "config": {
         "sort-packages": true,
