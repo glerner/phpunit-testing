@@ -2,8 +2,7 @@
 /**
  * Setup Plugin Tests
  *
- * PHP version of setup-plugin-tests.sh
- * Sets up the WordPress test environment for PHPUnit testing.
+ * Set up the WordPress test environment for PHPUnit testing.
  *
  * @package GL_PHPUnit_Testing
  */
@@ -57,19 +56,19 @@ if (file_exists($env_file)) {
  */
 function check_system_requirements(): bool {
     echo "Checking system requirements...\n";
-    
+
     // Check if git is available
     if (!is_executable(exec('which git'))) {
         echo "Error: git is required but not installed.\n";
         return false;
     }
-    
+
     // Check if mysql client is available
     if (!is_executable(exec('which mysql'))) {
         echo "Error: mysql client is required but not installed.\n";
         return false;
     }
-    
+
     // Check if PHP is available (obviously it is if we're running this script)
     echo "✅ System requirements met\n";
     return true;
@@ -84,7 +83,7 @@ function check_system_requirements(): bool {
  */
 function find_wordpress_root(string $current_dir, int $max_depth = 5): ?string {
     $depth = 0;
-    
+
     while ($depth < $max_depth) {
         if (file_exists($current_dir . '/wp-config.php')) {
             return realpath($current_dir);
@@ -92,7 +91,7 @@ function find_wordpress_root(string $current_dir, int $max_depth = 5): ?string {
         $current_dir = dirname($current_dir);
         $depth++;
     }
-    
+
     return null;
 }
 
@@ -107,12 +106,12 @@ function get_wp_config_value(string $search_value, string $wp_config_path): ?str
     if (!file_exists($wp_config_path)) {
         return null;
     }
-    
+
     $wp_config_content = file_get_contents($wp_config_path);
     if (preg_match("/define\s*\(\s*['\"]" . preg_quote($search_value, '/') . "['\"].*,\s*['\"]?([^'\"]*)['\"]?\s*\)/", $wp_config_content, $matches)) {
         return $matches[1];
     }
-    
+
     return null;
 }
 
@@ -126,13 +125,13 @@ function parse_lando_info(): ?array {
     if (empty($lando_info)) {
         return null;
     }
-    
+
     $lando_data = json_decode($lando_info, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
         echo "Warning: Failed to parse LANDO_INFO JSON: " . json_last_error_msg() . "\n";
         return null;
     }
-    
+
     return $lando_data;
 }
 
@@ -144,7 +143,7 @@ function parse_lando_info(): ?array {
  */
 function download_wp_tests(string $wp_tests_dir): bool {
     echo "Setting up WordPress test suite in: $wp_tests_dir\n";
-    
+
     // Create tests directory if it doesn't exist
     if (!is_dir($wp_tests_dir)) {
         if (!mkdir($wp_tests_dir, 0755, true)) {
@@ -152,59 +151,59 @@ function download_wp_tests(string $wp_tests_dir): bool {
             return false;
         }
     }
-    
+
     // Check if test suite is already installed
     if (is_dir("$wp_tests_dir/includes") && file_exists("$wp_tests_dir/includes/functions.php")) {
         echo "WordPress test suite already installed.\n";
         return true;
     }
-    
+
     echo "Downloading WordPress test suite...\n";
-    
+
     // Create temporary directory
     $tmp_dir = "$wp_tests_dir/tmp";
     if (is_dir($tmp_dir)) {
         system("rm -rf $tmp_dir");
     }
-    
+
     // Clone WordPress develop repository
     $cmd = "git clone --depth=1 https://github.com/WordPress/wordpress-develop.git $tmp_dir";
     echo "Running: $cmd\n";
     system($cmd, $return_var);
-    
+
     if ($return_var !== 0) {
         echo "Error: Failed to clone WordPress develop repository.\n";
         return false;
     }
-    
+
     // Copy required directories
     if (!is_dir("$tmp_dir/tests/phpunit")) {
         echo "Error: WordPress test suite not found in cloned repository.\n";
         system("rm -rf $tmp_dir");
         return false;
     }
-    
+
     // Create required directories
     foreach (['includes', 'data', 'tests'] as $dir) {
         if (!is_dir("$wp_tests_dir/$dir")) {
             mkdir("$wp_tests_dir/$dir", 0755, true);
         }
     }
-    
+
     // Copy files preserving directory structure
     system("cp -r $tmp_dir/tests/phpunit/includes/* $wp_tests_dir/includes/");
     system("cp -r $tmp_dir/tests/phpunit/data/* $wp_tests_dir/data/");
     system("cp -r $tmp_dir/tests/phpunit/tests/* $wp_tests_dir/tests/");
-    
+
     // Cleanup
     system("rm -rf $tmp_dir");
-    
+
     // Verify files exist
     if (!file_exists("$wp_tests_dir/includes/functions.php") || !file_exists("$wp_tests_dir/includes/install.php")) {
         echo "Error: Failed to download WordPress test suite files.\n";
         return false;
     }
-    
+
     echo "✅ WordPress test suite downloaded successfully.\n";
     return true;
 }
@@ -231,7 +230,7 @@ function generate_wp_tests_config(
     string $plugin_dir
 ): bool {
     echo "Generating wp-tests-config.php...\n";
-    
+
     $config_content = <<<EOT
 <?php
 /* Path to the WordPress codebase you'd like to test. Add a forward slash in the end. */
@@ -258,27 +257,26 @@ define('WP_PHP_BINARY', 'php');
 
 \$table_prefix = 'wptests_';
 EOT;
-    
+
     // Write config file
     if (file_put_contents("$wp_tests_dir/wp-tests-config.php", $config_content) === false) {
         echo "Error: Failed to write wp-tests-config.php.\n";
         return false;
     }
-    
-    // Create symlink to wp-tests-config.php in the tests directory
-    echo "Creating symlink to wp-tests-config.php...\n";
+
+    // Copy wp-tests-config.php to the tests directory
     $tests_dir = "$plugin_dir/tests";
-    
+
     // Create tests directory if it doesn't exist
     if (!is_dir($tests_dir)) {
         mkdir($tests_dir, 0755, true);
     }
-    
+
     // Remove existing symlink if it exists
     if (file_exists("$tests_dir/wp-tests-config.php")) {
         unlink("$tests_dir/wp-tests-config.php");
     }
-    
+
     // Instead of a symlink, copy the file directly
     // This is more reliable, especially in containerized environments
     if (copy("$wp_tests_dir/wp-tests-config.php", "$tests_dir/wp-tests-config.php")) {
@@ -287,7 +285,7 @@ EOT;
         echo "Warning: Failed to copy wp-tests-config.php. You may need to copy the file manually.\n";
         // Continue anyway, this is not critical
     }
-    
+
     echo "✅ wp-tests-config.php generated successfully.\n";
     return true;
 }
@@ -309,13 +307,18 @@ function install_test_suite(
     string $db_pass,
     string $db_host
 ): bool {
+    // Get database settings from environment variables if available
+    $env_db_host = getenv('TEST_DB_HOST');
+    $env_db_user = getenv('TEST_DB_USER');
+    $env_db_pass = getenv('TEST_DB_PASS');
+    $env_db_name = getenv('TEST_DB_NAME');
     echo "Setting up test database...\n";
     echo "Debug: Database parameters:\n";
     echo "  Host: $db_host\n";
     echo "  User: $db_user\n";
     echo "  Name: $db_name\n";
     echo "  Password length: " . strlen($db_pass) . "\n";
-    
+
     // Check if mysql command is available
     exec('which mysql', $output, $return_var);
     if ($return_var !== 0) {
@@ -323,44 +326,86 @@ function install_test_suite(
         echo "Please install it with: sudo apt-get install mysql-client\n";
         return false;
     }
-    
+
     // Check MySQL connection
     echo "Attempting to connect to MySQL...\n";
-    
+
     // Inside container or local, we use mysql directly
     echo "Using mysql with connection details...\n";
     $mysql_cmd = "mysql";
-    
+
     // In Lando environments, we use the standard WordPress test configuration
     $lando_info = parse_lando_info();
     if ($lando_info !== null) {
         echo "Using standard Lando database configuration...\n";
-        echo "Host: database, User: wordpress, Password: wordpress\n";
-        
-        // In Lando, the standard host is 'database' as defined in wp-tests-config.php
-        $db_host = 'database';
-        $db_user = 'wordpress';
-        $db_pass = 'wordpress';
+
+        // Find the database service
+        $db_service = null;
+        foreach ($lando_info as $service_name => $service_info) {
+            if (isset($service_info['type']) && ($service_info['type'] === 'mysql' || $service_info['type'] === 'mariadb')) {
+                $db_service = $service_info;
+                break;
+            }
+        }
+
+        // Environment variables were already loaded at the function start
+
+        // Get the database connection details
+        if ($db_service !== null) {
+            // First try environment variables (highest priority)
+            if ($env_db_host !== false) {
+                $db_host = $env_db_host;
+            } elseif (isset($db_service['internal_connection']['host'])) {
+                // Then try Lando info
+                $db_host = $db_service['internal_connection']['host'];
+            } else {
+                // Final fallback
+                $db_host = 'database';
+            }
+
+            // Get credentials - first from environment variables
+            if ($env_db_user !== false) {
+                $db_user = $env_db_user;
+            } elseif (isset($db_service['creds']['user'])) {
+                // Then from Lando info
+                $db_user = $db_service['creds']['user'];
+            }
+
+            if ($env_db_pass !== false) {
+                $db_pass = $env_db_pass;
+            } elseif (isset($db_service['creds']['password'])) {
+                // Then from Lando info
+                $db_pass = $db_service['creds']['password'];
+            }
+        } else {
+            // Default values if we can't find the service - from Lando environment variables
+            // See TEST_DB_HOST, TEST_DB_USER, TEST_DB_PASS in .lando.yml
+            $db_host = 'database';
+            $db_user = 'wordpress';
+            $db_pass = 'wordpress';
+        }
+
+        echo "Host: $db_host, User: $db_user, Password: $db_pass\n";
     }
-    
+
     // Verify the connection using the parameters that will be in wp-tests-config.php
     echo "Verifying database connection to $db_host...\n";
     $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"SELECT 1\" 2>&1";
     exec($cmd, $output, $return_var);
-    
+
     if ($return_var !== 0) {
         echo "Error: Cannot connect to MySQL server.\n";
         echo "Output: " . implode("\n", $output) . "\n";
         return false;
     }
-    
+
     echo "✅ Connected to MySQL on host: $db_host\n";
-    
+
     echo "✅ MySQL connection successful\n";
-    
+
     // Try to drop database if exists
     echo "Attempting to drop existing database...\n";
-    
+
     // In Lando, we know the root user has no password
     if ($lando_info !== null) {
         echo "Using root user to drop database in Lando environment...\n";
@@ -369,9 +414,9 @@ function install_test_suite(
         // In local environment, use provided user
         $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"DROP DATABASE IF EXISTS $db_name\" 2>&1";
     }
-    
+
     exec($cmd, $output, $return_var);
-    
+
     if ($return_var !== 0) {
         echo "Warning: Failed to drop test database.\n";
         echo "Output: " . implode("\n", $output) . "\n";
@@ -379,10 +424,10 @@ function install_test_suite(
     } else {
         echo "✅ Existing database dropped (if it existed)\n";
     }
-    
+
     // Create database and grant permissions
     echo "Creating database...\n";
-    
+
     // In Lando, we know the root user has no password
     if ($lando_info !== null) {
         echo "Creating database and granting permissions (Lando environment)...\n";
@@ -391,39 +436,39 @@ function install_test_suite(
         // In local environment, use provided user
         $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"CREATE DATABASE IF NOT EXISTS $db_name\" 2>&1";
     }
-    
+
     exec($cmd, $output, $return_var);
-    
+
     if ($return_var !== 0) {
         echo "Error: Failed to create test database.\n";
         echo "Output: " . implode("\n", $output) . "\n";
         return false;
     }
-    
+
     echo "✅ Database created successfully\n";
-    
+
     // Verify database exists and is accessible
     echo "Verifying database access...\n";
     $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"USE $db_name; SELECT DATABASE();\" 2>&1";
     exec($cmd, $output, $return_var);
-    
+
     if ($return_var !== 0) {
         echo "Error: Cannot access test database after creation.\n";
         echo "Output: " . implode("\n", $output) . "\n";
         return false;
     }
-    
+
     echo "✅ Test database created and verified\n";
-    
+
     // Install WordPress test framework
     echo "Installing WordPress test framework...\n";
-    
+
     // Verify required files exist
     if (!file_exists("$wp_tests_dir/includes/functions.php") || !file_exists("$wp_tests_dir/includes/install.php")) {
         echo "Error: WordPress test framework files not found. Please check the installation.\n";
         return false;
     }
-    
+
     // Create a temporary PHP script to run the installation
     $install_script = <<<EOT
 <?php
@@ -437,21 +482,21 @@ require_once '$wp_tests_dir/includes/install.php';
 echo "Installing...\n";
 tests_install('$wp_tests_dir/data');
 EOT;
-    
+
     file_put_contents("$wp_tests_dir/install-wp-tests.php", $install_script);
-    
+
     // Execute the PHP script
     echo "Running WordPress test installation...\n";
     system("php $wp_tests_dir/includes/install.php $wp_tests_dir/wp-tests-config.php", $return_var);
-    
+
     // Clean up
     unlink("$wp_tests_dir/install-wp-tests.php");
-    
+
     if ($return_var !== 0) {
         echo "Error: Failed to install WordPress test framework.\n";
         return false;
     }
-    
+
     echo "✅ WordPress test framework installed successfully.\n";
     return true;
 }
@@ -474,11 +519,27 @@ $plugin_slug = basename($plugin_dir);
 $wp_root = getenv('FILESYSTEM_WP_ROOT') ?: '/home/george/sites/wordpress';
 $lando_webroot = getenv('LANDO_WEBROOT');
 
+// Check if we're running in a Lando environment
+$lando_info = getenv('LANDO_INFO');
+$in_lando = $lando_info !== false;
+
+// Get database settings from environment variables if available
+// These will be used as the highest priority source for database settings
+$env_db_host = getenv('TEST_DB_HOST');
+$env_db_user = getenv('TEST_DB_USER');
+$env_db_pass = getenv('TEST_DB_PASS');
+$env_db_name = getenv('TEST_DB_NAME');
+
+// Clean up any path with './' in it
+if ($lando_webroot !== false && strpos($lando_webroot, './') !== false) {
+    $lando_webroot = str_replace('./', '', $lando_webroot);
+}
+
 // Check for Lando environment
-$lando_info = parse_lando_info();
-if ($lando_info !== null) {
+if ($in_lando) {
     echo "Using Lando configuration...\n";
-    $wp_root = $lando_webroot ? rtrim($lando_webroot, '/') : '/app';
+    // Clean up the path by removing any ./ in the path
+    $wp_root = $lando_webroot ? rtrim(str_replace('/./','/', $lando_webroot), '/') : '/app';
 } else {
     // For local environment, try to find WordPress root
     echo "Not using Lando configuration, assuming local environment...\n";
@@ -509,9 +570,9 @@ if (file_exists($wp_config_path)) {
 }
 
 // Override with Lando database configuration if available
-if ($lando_info !== null) {
+if ($in_lando) {
     echo "Getting Lando internal configuration...\n";
-    
+
     // Find the database service
     $db_service = null;
     foreach ($lando_info as $service_name => $service_info) {
@@ -520,47 +581,73 @@ if ($lando_info !== null) {
             break;
         }
     }
-    
+
     if ($db_service !== null) {
-        // In Lando, we need to use the internal connection host
-        if (isset($db_service['internal_connection']['host'])) {
+        // Environment variables were already loaded at the script level
+
+        // First try environment variables (highest priority)
+        if ($env_db_host !== false) {
+            $db_host = $env_db_host;
+        } elseif (isset($db_service['internal_connection']['host'])) {
+            // Then try Lando info
             $db_host = $db_service['internal_connection']['host'];
         } else {
-            // Fallback for older Lando versions or different configurations
+            // Final fallback
             $db_host = 'database';
         }
-        
-        if (isset($db_service['creds']['user'])) {
+
+        // Get credentials - first from environment variables
+        if ($env_db_user !== false) {
+            $db_user = $env_db_user;
+        } elseif (isset($db_service['creds']['user'])) {
+            // Then from Lando info
             $db_user = $db_service['creds']['user'];
         }
-        
-        if (isset($db_service['creds']['password'])) {
+
+        if ($env_db_pass !== false) {
+            $db_pass = $env_db_pass;
+        } elseif (isset($db_service['creds']['password'])) {
+            // Then from Lando info
             $db_pass = $db_service['creds']['password'];
         }
-        
-        $db_name = "wordpress_test";  // Set the test database name explicitly
-        
+
+        // Get database name from environment or use default
+        if ($env_db_name !== false) {
+            $db_name = $env_db_name;
+        } else {
+            // Use the actual database name for tests
+            $db_name = "wordpress_test";
+        }
+
         echo "Using Lando database configuration:\n";
         echo "  Host: $db_host\n";
         echo "  User: $db_user\n";
         echo "  Test Database will be: $db_name\n";
-        
+
         // Override paths for Lando environment
         $wp_root = "/app";
         $wp_config_path = "$wp_root/wp-config.php";
     } else {
-        // If we couldn't find the database service in Lando info
-        // but we're still in Lando, use these default values
-        $db_host = 'database'; // This is the default service name in Lando
-        $db_user = 'wordpress';
-        $db_pass = 'wordpress';
-        $db_name = 'wordpress_test';
+        echo "\033[31mWARNING: Database service not found in Lando configuration!\033[0m\n";
+        echo "This indicates a potential issue with your Lando setup.\n";
+        echo "Please check that your .lando.yml file has a valid database service configured.\n";
+        echo "Example configuration:\n";
+        echo "  database:\n";
+        echo "    type: mysql:8.0\n";
+        echo "    healthcheck: mysql -uroot --silent --execute \"SHOW DATABASES;\"\n\n";
         
+        // Continue with the current database settings
+        echo "Current database settings being used:\n";
+        echo "  Host: $db_host\n";
+        echo "  User: $db_user\n";
+        echo "  Password: [hidden]\n";
+        echo "  Test Database: $db_name\n\n";
+
         echo "Using default Lando database configuration:\n";
         echo "  Host: $db_host\n";
         echo "  User: $db_user\n";
         echo "  Test Database will be: $db_name\n";
-        
+
         // Override paths for Lando environment
         $wp_root = "/app";
         $wp_config_path = "$wp_root/wp-config.php";

@@ -17,6 +17,13 @@ This repository contains a comprehensive testing framework designed specifically
 - **Consistent Structure**: Standardized directory organization and naming conventions
 - **Development Tools**: Optional configurations for PHPStan, PHPCS, and other quality assurance tools
 
+## Requirements
+
+- PHP 8.1 or higher
+- PHPUnit 9.x (Note: As of April 2025, PHPUnit 10.x is not supported due to compatibility with Yoast PHPUnit Polyfills)
+- WordPress 6.0 or higher (for integration tests)
+- Composer
+
 ## Documentation
 
 Comprehensive documentation is available in the `docs/` directory:
@@ -26,6 +33,19 @@ Comprehensive documentation is available in the `docs/` directory:
 - [Technology Choices](docs/technology-choices.md) - Explanation of technology decisions for this project
 
 ## Installation Options
+
+### Installing PHPUnit
+
+PHPUnit is installed via Composer as part of the framework's dependencies. The framework requires PHPUnit 9.x due to compatibility requirements with other dependencies.
+
+After setting up the framework, you can run PHPUnit using:
+
+```bash
+# From your plugin directory
+./vendor/bin/phpunit
+```
+
+For detailed instructions on installing and using PHPUnit with this framework, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
 
 ### Option 1: Git Submodule (Recommended for Contributors)
 
