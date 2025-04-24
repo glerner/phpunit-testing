@@ -84,7 +84,7 @@ lando ssh -c 'mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EX
 
 # Or if you are not using Lando, from SSH:
 
-mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; CREATE DATABASE wordpress_test;"'
+mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; CREATE DATABASE wordpress_test;"
 ```
 
 ### Clean Configuration Files
@@ -195,6 +195,101 @@ When working with WordPress testing tools, you may encounter other dependency co
 
 ## Common Errors and Solutions
 
+### "bash: /usr/bin/composer: No such file or directory"
+
+**Symptoms**:
+When running `composer update` or other Composer commands, you get an error like:
+```
+bash: /usr/bin/composer: No such file or directory
+```
+
+**Cause**:
+This error occurs when your shell session is looking for Composer in `/usr/bin/composer`, but Composer is installed in a different location (commonly `/usr/local/bin/composer`). This can happen when:
+
+1. Your terminal session has an outdated PATH environment variable
+2. Composer was installed after you opened your terminal session
+3. Your `.bashrc` or `.bash_profile` was updated but not reloaded
+
+**Solutions**:
+
+1. **Reload your shell configuration**:
+   ```bash
+   source ~/.bashrc
+   # or
+   source ~/.bash_profile
+   ```
+
+2. **Check where Composer is actually installed**:
+   ```bash
+   which composer
+   ```
+
+3. **Create a symbolic link** (requires admin privileges):
+   ```bash
+   sudo ln -s $(which composer) /usr/bin/composer
+   ```
+
+4. **Start a new terminal session** to ensure it loads the latest environment variables
+
+### "Failed opening required '/app/wp-includes/class-wp-phpmailer.php'"
+
+**Symptoms**:
+When running the `setup-plugin-tests.php` script, you encounter errors like:
+```
+PHP Fatal error: Uncaught Error: Failed opening required '/app/wp-includes/class-wp-phpmailer.php'
+```
+
+**Important Note**: This error reflects a version mismatch between the WordPress test framework and your WordPress installation. Around WordPress 5.5 (2019), WordPress changed from using `class-wp-phpmailer.php` to `class-phpmailer.php`, but the test framework still looks for the old filename.
+
+**Cause**:
+This error occurs for several possible reasons:
+
+1. Version mismatch between WordPress core and the WordPress test framework
+2. The WordPress installation path is incorrect in the setup script
+3. The WordPress core files are not where the script expects them to be
+4. In Lando environments, the path mapping between host and container is not correctly configured
+
+**Solutions** (in order of preference):
+
+1. **Use a compatible version of the WordPress test framework**:
+   The best solution is to use a version of the test framework that matches your WordPress version. The setup script should be updated to download the appropriate version.
+
+2. **Patch the test framework after download**:
+   Modify the setup script to patch the test framework's mock-mailer.php file after downloading it, updating the require path to use the current filename.
+
+3. **Create a symbolic link as a temporary workaround**:
+   ```bash
+   # Inside Lando SSH
+   cd /app/wp-includes
+   ln -sf class-phpmailer.php class-wp-phpmailer.php
+   ```
+   Note: This is a temporary workaround, not a proper solution for production environments.
+
+2. **Verify WordPress core files location**:
+   ```bash
+   # Inside Lando SSH
+   ls -la /app/wp-includes/
+   ```
+   If this directory doesn't exist or is empty, WordPress core files are not where expected.
+
+2. **Check WordPress path in setup script**:
+   The script may be using an incorrect path to WordPress. Verify that the WordPress root path is correctly detected.
+
+3. **Manually specify WordPress path**:
+   You can edit the `.env.testing` file to explicitly set the WordPress path:
+   ```
+   WP_ROOT=/correct/path/to/wordpress
+   ```
+
+4. **For Lando environments**:
+   Ensure your `.lando.yml` file correctly sets the webroot. In Lando, the webroot setting determines what gets mapped to `/app` in the container:
+   ```yaml
+   # In .lando.yml
+   config:
+     webroot: .
+   ```
+   The above example maps the current directory to `/app` in the container.
+
 ### "Cannot connect to MySQL server"
 
 **Symptoms**:
@@ -207,6 +302,134 @@ Error: Cannot connect to MySQL server. Full error output above.
 - Check database credentials
 - Ensure MySQL service is running
 - Check for network/firewall issues
+
+### "Empty Database After Lando Operations"
+
+**Symptoms**:
+After running `lando rebuild` or `lando poweroff` followed by `lando start`, your WordPress database is empty and phpMyAdmin shows no tables. MySQL queries return errors like:
+```
+ERROR 1146 (42S02): Table 'wordpress.wp_users' doesn't exist
+```
+
+**Cause**:
+Both `lando rebuild` and `lando poweroff` followed by `lando start` recreate the database containers but don't automatically restore the database content. This is because:
+
+1. Lando uses Docker volumes for databases, which may be removed during these operations
+2. The database initialization scripts only run when the container is first created
+3. No automatic backup/restore mechanism is built into these commands
+
+**Solutions**:
+
+1. **Import your database backup using WP-CLI**:
+   ```bash
+   # Replace backup-file.sql with your actual backup file
+   lando wp db import --user=wordpress backup-file.sql
+   ```
+
+2. **Import using direct MySQL command** (inside Lando SSH):
+   ```bash
+   mysql -h database -u wordpress -pwordpress wordpress < backup-file.sql
+   ```
+   Note: There is no space between `-p` and the password.
+
+3. **Restore from a Lando database backup** (if you created one):
+   ```bash
+   lando db-import lando-database-backup.sql.gz
+   ```
+
+4. **Recreate the database from scratch**:
+   If you don't have a backup, you may need to reinstall WordPress:
+   ```bash
+   lando wp core install --url=https://yoursite.lndo.site --title="Your Site" --admin_user=admin --admin_password=password --admin_email=your@email.com
+   ```
+5. **Verify have WordPress database tables**:
+   ```bash
+   lando mysql -h database -u wordpress -pwordpress -e "USE wordpress; SHOW TABLES;"
+   ```
+
+### "foreach() argument must be of type array|object, string given"
+
+**Symptoms**:
+When running the `setup-plugin-tests.php` script, you see errors like:
+```
+PHP Warning: foreach() argument must be of type array|object, string given in .../setup-plugin-tests.php
+WARNING: Database service not found in Lando configuration!
+```
+
+**Cause**:
+This typically happens when:
+1. Lando is not fully running or is in a partially started state
+2. The script detects it's in a Lando environment (`$in_lando = TRUE`), but Lando services aren't accessible
+3. The `lando info` command is failing to return proper configuration data
+
+**Solutions**:
+
+1. **Ensure Lando is running**:
+   ```bash
+   # Check if Lando is running
+   lando list
+
+   # If not running, start it
+   lando start
+   ```
+
+2. **Run the script inside Lando SSH**:
+   ```bash
+   lando ssh
+   cd /app/wp-content/plugins/your-plugin
+   php bin/setup-plugin-tests.php
+   ```
+
+3. **Manually set database configuration**:
+   If Lando detection is failing, you can manually configure the database settings in your `.env.testing` file:
+   ```
+   WP_TESTS_DB_NAME=wordpress_test
+   WP_TESTS_DB_USER=wordpress
+   WP_TESTS_DB_PASSWORD=wordpress
+   WP_TESTS_DB_HOST=database
+   ```
+
+### Path Issues in `.env.testing` When Running `setup-plugin-tests.php`
+
+**Symptoms**:
+When running the `setup-plugin-tests.php` script, you encounter errors like:
+```
+PHP Warning: mkdir(): Permission denied in .../setup-plugin-tests.php
+Error: Failed to create tests directory: /app/wp-content/plugins/wordpress-develop/tests/phpunit
+```
+
+**Cause**:
+The script is trying to use paths from your `.env.testing` file that may be valid in one environment (e.g., inside a container) but invalid in your current environment. For example:
+
+1. Paths starting with `/app/` are typically valid inside containers (Lando, Docker) but not on local machines
+2. The script is running in a different environment than what the paths in `.env.testing` are configured for
+
+**Solutions**:
+
+1. **Let the script detect paths automatically**:
+   If you're unsure about the correct paths, remove the `WP_TESTS_DIR` and `WP_ROOT` entries from your `.env.testing` file and let the script try to detect them automatically.
+
+2. **Run the script in the correct environment**:
+   If your `.env.testing` uses container paths (like `/app/`), run the script inside that container:
+   ```bash
+   # For Lando
+   lando ssh -c "cd /app/wp-content/plugins/your-plugin && php bin/setup-plugin-tests.php"
+   ```
+
+3. **Update `.env.testing` with correct paths for your environment**:
+   Edit the `.env.testing` file to use paths appropriate for where you're running the script:
+
+   For local machine:
+   ```
+   WP_TESTS_DIR=/home/username/sites/wordpress/wp-content/plugins/wordpress-develop/tests/phpunit
+   WP_ROOT=/home/username/sites/wordpress
+   ```
+
+   For container (e.g., Lando):
+   ```
+   WP_TESTS_DIR=/app/wp-content/plugins/wordpress-develop/tests/phpunit
+   WP_ROOT=/app
+   ```
 
 ### "WordPress develop repository clone failed"
 

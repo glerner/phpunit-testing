@@ -635,7 +635,7 @@ if ($in_lando) {
         echo "  database:\n";
         echo "    type: mysql:8.0\n";
         echo "    healthcheck: mysql -uroot --silent --execute \"SHOW DATABASES;\"\n\n";
-        
+
         // Continue with the current database settings
         echo "Current database settings being used:\n";
         echo "  Host: $db_host\n";
@@ -654,8 +654,22 @@ if ($in_lando) {
     }
 }
 
+// Validate that we have a proper WordPress installation
+if (!file_exists("$wp_root/wp-includes") || !file_exists("$wp_root/wp-admin") || !file_exists("$wp_root/wp-content")) {
+    echo "\033[31mERROR: The detected WordPress root ($wp_root) does not appear to be a valid WordPress installation.\033[0m\n";
+    echo "Could not find one or more of the following directories:\n";
+    echo "  - $wp_root/wp-includes\n";
+    echo "  - $wp_root/wp-admin\n";
+    echo "  - $wp_root/wp-content\n\n";
+    echo "Please ensure you're running this script from within a WordPress plugin directory.\n";
+    exit(1);
+}
+
+echo "✅ Valid WordPress installation detected at: $wp_root\n";
+
 // Set up WordPress test suite directory
-$wp_tests_dir = getenv('WP_TESTS_DIR') ?: "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
+// Always use the detected WordPress root to build the test directory path
+$wp_tests_dir = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
 echo "Using WordPress test directory: $wp_tests_dir\n";
 
 // Download and set up test suite
@@ -669,7 +683,7 @@ if (!generate_wp_tests_config($wp_tests_dir, $wp_root, $db_name, $db_user, $db_p
 }
 
 // Create build directories for test coverage reports
-echo "Creating build directories for test coverage...\n";
+echo "Creating build directories for test coverage in $plugin_dir\n";
 $build_dirs = ["$plugin_dir/build/logs", "$plugin_dir/build/coverage"];
 foreach ($build_dirs as $dir) {
     if (!is_dir($dir)) {

@@ -13,22 +13,55 @@ This repository contains a comprehensive testing framework designed specifically
 
 - **Modular Design**: Use only what you need - from basic test classes to complete development environments
 - **WordPress Integration**: Specialized tools for testing WordPress hooks, filters, and functions
+- **Clean Separation of Test Types**: Unlike most WordPress testing approaches, this framework maintains complete separation between different test types:
+  - Dedicated directories for each test type (`tests/unit/`, `tests/wp-mock/`, `tests/integration/`)
+  - Specialized configuration files for each test type (`phpunit-unit.xml.dist`, etc.)
+  - Type-specific bootstrap files that load only what's needed
+  - Simple execution through dedicated Composer scripts (`test:unit`, `test:wp-mock`, `test:integration`)
 - **Multiple Test Types**: Support for unit tests, integration tests, and WordPress-specific tests
+  - See [phpunit-testing-tutorial.md](docs/guides/phpunit-testing-tutorial.md) for detailed guidance
+  - **Unit Tests**: For isolated testing of functions and classes without WordPress
+  - **WP_Mock Tests**: For testing code that interacts with WordPress functions
+  - **Integration Tests**: For testing against a real WordPress database and environment
 - **Consistent Structure**: Standardized directory organization and naming conventions
-- **Development Tools**: Optional configurations for PHPStan, PHPCS, and other quality assurance tools
+- **Comprehensive Testing Libraries**:
+  - **PHPUnit**: Core testing framework
+  - **WP_Mock**: WordPress function mocking
+  - **Brain\Monkey**: WordPress hooks and functions mocking
+  - **Mockery**: General-purpose mocking
+  - **PHPUnit Polyfills**: Cross-version compatibility
+- **Code Quality Tools**:
+  - **PHP_CodeSniffer**: Code style and standards checking
+  - **WordPress Coding Standards**: WordPress-specific standards
+  - **PHP Compatibility**: Version compatibility checking
+  - **PHP CS Fixer**: Automatic code style fixes
+  - **PHPStan**: Static analysis for bug detection
+- **Convenient Composer Scripts**: Ready-to-use commands for testing, code quality checks, and development workflows
 
 ## Requirements
 
 - PHP 8.1 or higher
-- PHPUnit 9.x (Note: As of April 2025, PHPUnit 10.x is not supported due to compatibility with Yoast PHPUnit Polyfills)
+- PHPUnit 9.x (Note: As of April 2025, PHPUnit 10.x is not supported due to incompatibility with Yoast PHPUnit Polyfills)
 - WordPress 6.0 or higher (for integration tests)
 - Composer
 
+## Why Separate Test Types?
+
+The clean separation of test types is a key differentiator of this framework compared to most WordPress testing approaches. This separation provides several important benefits:
+
+- **Clearer Test Organization**: No confusion about which mocking approach to use
+- **Simplified Debugging**: Issues in one test type don't affect others
+- **Easier Maintenance**: Each test type can evolve independently
+- **Better Developer Experience**: Clear, dedicated paths for each testing need
+- **Faster Test Execution**: Only load what you need for each test type
+
+Rather than using a single configuration with conditional logic and environment variables, this framework provides dedicated files and directories for each test type, making it more intuitive and less error-prone.
+
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
-
-- [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md) - A complete guide to PHPUnit testing for WordPress
+- [Installation Guide](docs/guides/installation-guide.md) - Step-by-step instructions for installing and configuring the framework
+- [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md) - Comprehensive guide to writing tests
+- [Troubleshooting Guide](docs/guides/troubleshooting-guide.md) - Solutions for common issues and challenges
 - [Git and GitHub Setup Guide](docs/git-github-setup-guide.md) - How to set up Git repositories for your projects
 - [Technology Choices](docs/technology-choices.md) - Explanation of technology decisions for this project
 
@@ -45,7 +78,9 @@ After setting up the framework, you can run PHPUnit using:
 ./vendor/bin/phpunit
 ```
 
-For detailed instructions on installing and using PHPUnit with this framework, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
+For detailed instructions on installing and configuring this framework, see the [Installation Guide](docs/guides/installation-guide.md).
+
+For guidance on writing and running tests, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
 
 ### Option 1: Git Submodule (Recommended for Contributors)
 
