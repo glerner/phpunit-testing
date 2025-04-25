@@ -23,6 +23,7 @@ This repository contains a comprehensive testing framework designed specifically
   - **Unit Tests**: For isolated testing of functions and classes without WordPress
   - **WP_Mock Tests**: For testing code that interacts with WordPress functions
   - **Integration Tests**: For testing against a real WordPress database and environment
+  - Any class can have multiple test types (e.g., Unit tests for specific data returns, WP_Mock tests for WordPress function interactions, and Integration tests for database operations)
 - **Consistent Structure**: Standardized directory organization and naming conventions
 - **Comprehensive Testing Libraries**:
   - **PHPUnit**: Core testing framework

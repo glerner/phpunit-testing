@@ -132,19 +132,31 @@ For integration tests that interact with a real WordPress installation, you'll n
 
 > **Note:** While WordPress CLI's `wp scaffold plugin-tests` command generates a shell script (`install-wp-tests.sh`), we recommend using our PHP script instead, which provides better environment detection, error handling, and compatibility with different setups including Lando.
 
-This framework provides a PHP script to set up the WordPress test environment:
+This framework provides a PHP script to set up the WordPress test environment. The script needs to access both the file system and database, which may require different environments depending on your setup.
+
+Before running the script, make sure your `.env.testing` file has the correct `SSH_COMMAND` setting for your environment:
 
 ```bash
-# Run the setup script provided by this framework
+# First, ensure your .env.testing has the correct SSH_COMMAND setting:
+# - SSH_COMMAND=none          # For local development with direct DB access
+# - SSH_COMMAND=ssh           # Already in an SSH session with DB access (don't launch another SSH session)
+# - SSH_COMMAND=lando ssh     # For Lando environments
+# - SSH_COMMAND=yourcommand   # Whatever command you need for your specific environment
+
+# Then run the setup script from your plugin directory
 php bin/setup-plugin-tests.php
 ```
 
 This script will:
 - Download the WordPress testing suite from the official WordPress develop repository
-- Configure the test database
+- Configure the test database (using the SSH_COMMAND setting for database operations)
 - Set up necessary configuration files
 - Create test directories if they don't exist
 - Set up build directories for test logs and coverage reports
+
+> **Important:** The setup script performs both local filesystem operations and database operations. The `SSH_COMMAND` setting tells the script how to get to the correct terminal to run database commands, which may need to be executed in a different environment than the script itself.
+>
+> **Note on Database Types:** The WordPress test suite is designed to work with MySQL/MariaDB databases. While the script currently uses `mysql` commands, support for other database systems may be added in future versions if there is demand.
 
 ### Test Directory Structure
 
@@ -187,11 +199,30 @@ php bin/setup-plugin-tests.php
 
 ### Lando Environment
 
-If you're using Lando, the script will automatically detect your Lando environment and use the correct database settings. You can run the script inside Lando SSH:
+If you're using Lando, set your `.env.testing` file with the correct Lando settings:
+
+```
+# Set SSH_COMMAND for Lando
+SSH_COMMAND=lando ssh
+
+# Database settings for Lando
+WP_TESTS_DB_HOST=database
+WP_TESTS_DB_USER=wordpress
+WP_TESTS_DB_PASSWORD=wordpress
+WP_TESTS_DB_NAME=wordpress_test
+```
+
+Then run the setup script from your plugin directory on your local machine:
 
 ```bash
-lando ssh -c 'cd /app/wp-content/plugins/your-plugin && php bin/setup-plugin-tests.php'
+# First sync your files if working outside the WordPress directory
+composer sync:wp
+
+# Then run the setup script
+php bin/setup-plugin-tests.php
 ```
+
+The script will use `lando ssh` automatically for database operations while performing filesystem operations locally.
 
 ## Configuring Composer
 

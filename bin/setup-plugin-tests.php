@@ -1,6 +1,6 @@
 <?php
 /**
- * Setup Plugin Tests
+ * Setup Plugin Tests - Updated with centralized settings
  *
  * Set up the WordPress test environment for PHPUnit testing.
  *
@@ -8,6 +8,8 @@
  */
 
 declare(strict_types=1);
+
+// This is a test edit
 
 // Exit if accessed directly
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
@@ -22,33 +24,90 @@ ini_set('display_errors', '1');
 define('SCRIPT_DIR', dirname(__FILE__));
 define('PROJECT_DIR', dirname(SCRIPT_DIR));
 
-// Load environment variables from .env.testing if it exists
-$env_file = PROJECT_DIR . '/.env.testing';
-if (file_exists($env_file)) {
-    echo "Loading environment variables from .env.testing...\n";
-    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        // Skip comments
-        if (strpos(trim($line), '#') === 0) {
-            continue;
-        }
+/**
+ * Load settings from .env.testing file
+ *
+ * @return array Loaded settings
+ */
+function load_settings_file(): array {
+    $settings = [];
+    $env_file = PROJECT_DIR . '/.env.testing';
 
-        // Parse valid environment variable lines
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-
-            // Remove quotes if present
-            if (preg_match('/^(["\'])(.*)\1$/', $value, $matches)) {
-                $value = $matches[2];
+    if (file_exists($env_file)) {
+        echo "Loading environment variables from .env.testing...\n";
+        $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            // Skip comments
+            if (strpos(trim($line), '#') === 0) {
+                continue;
             }
 
-            putenv("$key=$value");
+            // Parse valid setting lines
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim($value);
+
+                // Remove quotes if present
+                if (preg_match('/^(["\'])(.*)\1$/', $value, $matches)) {
+                    $value = $matches[2];
+                }
+
+                putenv("$key=$value");
+                $settings[$key] = $value;
+            }
         }
     }
+
+    return $settings;
 }
 
+/**
+ * Get a configuration value from environment variables, .env file, or default
+ *
+ * @param string $name Setting name
+ * @param mixed $default Default value if not found
+ * @return mixed Setting value
+ */
+function get_setting(string $name, $default = null) {
+    // Check environment variables first (highest priority)
+    $env_value = getenv($name);
+    if ($env_value !== false) {
+        return $env_value;
+    }
+
+    // Check our loaded settings (already loaded from .env.testing)
+    global $loaded_settings;
+    if (isset($loaded_settings[$name])) {
+        return $loaded_settings[$name];
+    }
+
+    // Return default if not found
+    return $default;
+}
+
+// Load settings from .env.testing
+$loaded_settings = load_settings_file();
+
+/**
+ * Format SSH command properly based on the SSH_COMMAND setting
+ *
+ * @param string $ssh_command The SSH command to use
+ * @param string $command The command to execute via SSH
+ * @return string The properly formatted command
+ */
+function format_ssh_command(string $ssh_command, string $command): string {
+    // Check if this is a lando ssh command
+    if (strpos($ssh_command, 'lando ssh') === 0) {
+        // Lando requires the -c flag to execute commands
+        // Remove any double quotes that might cause issues
+        // $command = str_replace('"', '', $command);
+        return "$ssh_command -c \"$command\" 2>&1";
+    } else {
+        // Regular SSH command
+        return "$ssh_command \"$command\" 2>&1";
+    }
+}
 /**
  * Check system requirements
  *
@@ -308,10 +367,11 @@ function install_test_suite(
     string $db_host
 ): bool {
     // Get database settings from environment variables if available
-    $env_db_host = getenv('TEST_DB_HOST');
-    $env_db_user = getenv('TEST_DB_USER');
-    $env_db_pass = getenv('TEST_DB_PASS');
-    $env_db_name = getenv('TEST_DB_NAME');
+    // Get database settings with priority order
+    $db_host = get_setting('WP_TESTS_DB_HOST', $db_host);
+    $db_user = get_setting('WP_TESTS_DB_USER', $db_user);
+    $db_pass = get_setting('WP_TESTS_DB_PASSWORD', $db_pass);
+    $db_name = get_setting('WP_TESTS_DB_NAME', $db_name);
     echo "Setting up test database...\n";
     echo "Debug: Database parameters:\n";
     echo "  Host: $db_host\n";
@@ -330,67 +390,59 @@ function install_test_suite(
     // Check MySQL connection
     echo "Attempting to connect to MySQL...\n";
 
-    // Inside container or local, we use mysql directly
-    echo "Using mysql with connection details...\n";
-    $mysql_cmd = "mysql";
+    // Get SSH command from settings with priority order
+    $ssh_command = get_setting('SSH_COMMAND', 'none');
 
-    // In Lando environments, we use the standard WordPress test configuration
-    $lando_info = parse_lando_info();
-    if ($lando_info !== null) {
+    // Prepare the mysql command based on SSH_COMMAND setting
+    $mysql_cmd = "mysql";
+    $use_ssh = false;
+
+    // Determine how to execute database commands
+    if ($ssh_command === 'none') {
+        echo "Using mysql directly (no SSH needed)\n";
+    } elseif ($ssh_command === 'ssh') {
+        // Already in an SSH session, use mysql directly
+        echo "Already in SSH session, using mysql directly\n";
+    } else {
+        // Use the specified SSH command to access the database
+        echo "Using SSH command: $ssh_command\n";
+        $use_ssh = true;
+    }
+
+    // Determine if we're targeting a Lando environment based on SSH_COMMAND
+    $targeting_lando = $ssh_command === 'lando ssh';
+
+    if ($targeting_lando) {
         echo "Using standard Lando database configuration...\n";
 
-        // Find the database service
-        $db_service = null;
-        foreach ($lando_info as $service_name => $service_info) {
-            if (isset($service_info['type']) && ($service_info['type'] === 'mysql' || $service_info['type'] === 'mariadb')) {
-                $db_service = $service_info;
-                break;
-            }
-        }
+        // For Lando environments, use standard database settings
+        // These are the default values in a standard Lando WordPress setup
 
-        // Environment variables were already loaded at the function start
-
-        // Get the database connection details
-        if ($db_service !== null) {
-            // First try environment variables (highest priority)
-            if ($env_db_host !== false) {
-                $db_host = $env_db_host;
-            } elseif (isset($db_service['internal_connection']['host'])) {
-                // Then try Lando info
-                $db_host = $db_service['internal_connection']['host'];
-            } else {
-                // Final fallback
-                $db_host = 'database';
-            }
-
-            // Get credentials - first from environment variables
-            if ($env_db_user !== false) {
-                $db_user = $env_db_user;
-            } elseif (isset($db_service['creds']['user'])) {
-                // Then from Lando info
-                $db_user = $db_service['creds']['user'];
-            }
-
-            if ($env_db_pass !== false) {
-                $db_pass = $env_db_pass;
-            } elseif (isset($db_service['creds']['password'])) {
-                // Then from Lando info
-                $db_pass = $db_service['creds']['password'];
-            }
-        } else {
-            // Default values if we can't find the service - from Lando environment variables
-            // See TEST_DB_HOST, TEST_DB_USER, TEST_DB_PASS in .lando.yml
-            $db_host = 'database';
-            $db_user = 'wordpress';
-            $db_pass = 'wordpress';
-        }
+        // Use get_setting with fallbacks for Lando environment
+        $db_host = get_setting('WP_TESTS_DB_HOST', 'database');
+        $db_user = get_setting('WP_TESTS_DB_USER', 'wordpress');
+        $db_pass = get_setting('WP_TESTS_DB_PASSWORD', 'wordpress');
 
         echo "Host: $db_host, User: $db_user, Password: $db_pass\n";
     }
 
     // Verify the connection using the parameters that will be in wp-tests-config.php
     echo "Verifying database connection to $db_host...\n";
-    $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"SELECT 1\" 2>&1";
+
+    // Build the MySQL command - using single quotes for Lando compatibility
+    $mysql_params = "-h $db_host -u $db_user -p$db_pass -e 'SELECT 1'";
+
+
+    // Execute the command with or without SSH wrapper
+    if ($use_ssh) {
+        // Use the helper function for SSH commands
+        $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
+    } else {
+        // For direct MySQL commands, use the original format
+        $cmd = "$mysql_cmd $mysql_params 2>&1";
+    }
+
+    echo "Debug: Executing command: $cmd\n";
     exec($cmd, $output, $return_var);
 
     if ($return_var !== 0) {
@@ -406,15 +458,23 @@ function install_test_suite(
     // Try to drop database if exists
     echo "Attempting to drop existing database...\n";
 
-    // In Lando, we know the root user has no password
-    if ($lando_info !== null) {
+    // Build the MySQL command
+    if ($targeting_lando) {
         echo "Using root user to drop database in Lando environment...\n";
-        $cmd = "$mysql_cmd -h \"$db_host\" -uroot -e \"DROP DATABASE IF EXISTS $db_name\" 2>&1";
+        $mysql_params = "-h $db_host -uroot -e 'DROP DATABASE IF EXISTS $db_name'";
     } else {
         // In local environment, use provided user
-        $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"DROP DATABASE IF EXISTS $db_name\" 2>&1";
+        $mysql_params = "-h $db_host -u $db_user -p$db_pass -e 'DROP DATABASE IF EXISTS $db_name'";
     }
 
+    // Execute the command with or without SSH wrapper
+    if ($use_ssh) {
+        $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
+    } else {
+        $cmd = "$mysql_cmd $mysql_params 2>&1";
+    }
+
+    echo "Debug: Executing command: $cmd\n";
     exec($cmd, $output, $return_var);
 
     if ($return_var !== 0) {
@@ -428,15 +488,23 @@ function install_test_suite(
     // Create database and grant permissions
     echo "Creating database...\n";
 
-    // In Lando, we know the root user has no password
-    if ($lando_info !== null) {
+    // Build the MySQL command
+    if ($targeting_lando) {
         echo "Creating database and granting permissions (Lando environment)...\n";
-        $cmd = "$mysql_cmd -h \"$db_host\" -uroot -e \"CREATE DATABASE IF NOT EXISTS $db_name; GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'%';\" 2>&1";
+        $mysql_params = "-h $db_host -uroot -e 'CREATE DATABASE IF NOT EXISTS $db_name; CREATE USER IF NOT EXISTS \"$db_user\"@\"%\" IDENTIFIED BY \"$db_pass\"; GRANT ALL PRIVILEGES ON $db_name.* TO \"$db_user\"@\"%\"; FLUSH PRIVILEGES;'";
     } else {
-        // In local environment, use provided user
-        $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"CREATE DATABASE IF NOT EXISTS $db_name\" 2>&1";
+        // In local environment, we need to connect as a user with CREATE USER privileges (typically root)
+        $mysql_params = "-h $db_host -uroot -e 'CREATE DATABASE IF NOT EXISTS $db_name; CREATE USER IF NOT EXISTS \"$db_user\"@\"%\" IDENTIFIED BY \"$db_pass\"; GRANT ALL PRIVILEGES ON $db_name.* TO \"$db_user\"@\"%\"; FLUSH PRIVILEGES;'";
     }
 
+    // Execute the command with or without SSH wrapper
+    if ($use_ssh) {
+        $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
+    } else {
+        $cmd = "$mysql_cmd $mysql_params 2>&1";
+    }
+
+    echo "Debug: Executing command: $cmd\n";
     exec($cmd, $output, $return_var);
 
     if ($return_var !== 0) {
@@ -449,7 +517,16 @@ function install_test_suite(
 
     // Verify database exists and is accessible
     echo "Verifying database access...\n";
-    $cmd = "$mysql_cmd -h \"$db_host\" -u \"$db_user\" -p\"$db_pass\" -e \"USE $db_name; SELECT DATABASE();\" 2>&1";
+    $mysql_params = "-h $db_host -u $db_user -p$db_pass -e 'SHOW DATABASES LIKE \"$db_name\"'";
+
+    // Execute the command with or without SSH wrapper
+    if ($use_ssh) {
+        $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
+    } else {
+        $cmd = "$mysql_cmd $mysql_params 2>&1";
+    }
+
+    echo "Debug: Executing command: $cmd\n";
     exec($cmd, $output, $return_var);
 
     if ($return_var !== 0) {
@@ -502,8 +579,108 @@ EOT;
 }
 
 /**
+ * Remove test database and files
+ *
+ * @param string $wp_tests_dir Directory where tests are installed
+ * @param string $db_name Database name
+ * @param string $db_host Database host
+ * @param string $ssh_command SSH command if using remote connection
+ * @return bool True if successful, false otherwise
+ */
+function remove_test_suite(
+    string $wp_tests_dir,
+    string $db_name,
+    string $db_host,
+    string $ssh_command = ''
+): bool {
+    echo "Removing WordPress test suite...\n";
+    
+    // Check if we need to use SSH
+    $use_ssh = !empty($ssh_command);
+    $targeting_lando = strpos($ssh_command, 'lando ssh') === 0;
+    
+    // Get MySQL command
+    $mysql_cmd = 'mysql';
+    
+    echo "Dropping test database...\n";
+    
+    // Build the MySQL command to drop the database
+    $mysql_params = "-h $db_host -uroot -e 'DROP DATABASE IF EXISTS $db_name;'";
+    
+    // Execute the command with or without SSH wrapper
+    if ($use_ssh) {
+        $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
+    } else {
+        $cmd = "$mysql_cmd $mysql_params 2>&1";
+    }
+    
+    echo "Debug: Executing command: $cmd\n";
+    exec($cmd, $output, $return_var);
+    
+    if ($return_var !== 0) {
+        echo "Error: Failed to drop test database.\n";
+        echo "Output: " . implode("\n", $output) . "\n";
+        // Continue anyway to remove files
+    } else {
+        echo "✅ Database dropped successfully\n";
+    }
+    
+    // Remove test files if they exist
+    if (file_exists($wp_tests_dir)) {
+        echo "Removing test files from $wp_tests_dir...\n";
+        system("rm -rf $wp_tests_dir");
+        echo "✅ Test files removed successfully\n";
+    } else {
+        echo "No test files found at $wp_tests_dir\n";
+    }
+    
+    return true;
+}
+
+/**
+ * Display help information
+ */
+function display_help(): void {
+    echo "\nGL WordPress PHPUnit Testing Framework - Setup Script\n";
+    echo "=================================================\n\n";
+    echo "Usage: php setup-plugin-tests.php [options]\n\n";
+    echo "Options:\n";
+    echo "  --help, -h           Display this help message\n";
+    echo "  --remove-all, --remove  Remove test database and files\n";
+    echo "\n";
+    echo "Description:\n";
+    echo "  This script sets up the WordPress testing environment for PHPUnit tests.\n";
+    echo "  It creates a test database, downloads the WordPress test suite, and\n";
+    echo "  configures everything needed to run PHPUnit tests for your plugin.\n\n";
+    echo "  The --remove-all option can be used to clean up the test environment\n";
+    echo "  by dropping the test database and removing test files.\n\n";
+    echo "Configuration:\n";
+    echo "  The script uses settings from .env.testing in the project root.\n";
+    echo "  See .env.sample.testing for available configuration options.\n\n";
+}
+
+/**
  * Main execution
  */
+
+// Parse command line arguments
+$remove_all = false;
+$show_help = false;
+
+foreach ($argv as $arg) {
+    if ($arg === '--remove-all' || $arg === '--remove') {
+        $remove_all = true;
+    } elseif ($arg === '--help' || $arg === '-h') {
+        $show_help = true;
+    }
+}
+
+// Display help if requested
+if ($show_help) {
+    display_help();
+    exit(0);
+}
+
 echo "Setting up WordPress plugin tests...\n";
 
 // Check system requirements
@@ -671,6 +848,20 @@ echo "✅ Valid WordPress installation detected at: $wp_root\n";
 // Always use the detected WordPress root to build the test directory path
 $wp_tests_dir = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
 echo "Using WordPress test directory: $wp_tests_dir\n";
+
+// Get SSH command if available
+$ssh_command = get_setting('SSH_COMMAND', '');
+
+// If --remove-all flag is set, remove test suite and exit
+if ($remove_all) {
+    if (remove_test_suite($wp_tests_dir, $db_name, $db_host, $ssh_command)) {
+        echo "\n✅ WordPress test suite successfully removed!\n";
+        exit(0);
+    } else {
+        echo "\n❌ Failed to completely remove WordPress test suite.\n";
+        exit(1);
+    }
+}
 
 // Download and set up test suite
 if (!download_wp_tests($wp_tests_dir)) {
