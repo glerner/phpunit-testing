@@ -70,7 +70,7 @@ To verify that the PHPUnit testing framework installation process works properly
 # Use your path to WordPress, e.g. ~/sites/wordpress
 rm -rf ~/sites/wordpress/wordpress-phpunit
 
-# Remove plugin test directory (if it exists)
+# Remove plugin test directory from WordPress (if it exists)
 rm -rf ~/sites/wordpress/wp-content/plugins/your-plugin/tests
 ```
 
@@ -80,11 +80,11 @@ Note: no space between -p and the password
 
 ```bash
 # Using Lando
-lando ssh -c 'mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; CREATE DATABASE wordpress_test;"'
+lando ssh -c 'mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; "'
 
 # Or if you are not using Lando, from SSH:
 
-mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; CREATE DATABASE wordpress_test;"
+mysql -h database -u wordpress -pwordpress -e "DROP DATABASE IF EXISTS wordpress_test; "
 ```
 
 ### Clean Configuration Files
@@ -150,12 +150,183 @@ mysql -h database -u wordpress -pwordpress -e "SELECT 1"
 
 If this fails, your database configuration may be incorrect.
 
+## Verification Checklist
+
+Use this checklist to verify your testing environment is correctly set up. This can help identify issues before running tests.
+
+### 1. Directory Structure Verification
+
+- [ ] WordPress test suite exists
+  ```bash
+  # Should show the wordpress-phpunit directory
+  ls -la ~/sites/wordpress/ | grep wordpress-phpunit
+
+  ```
+
+- [ ] Plugin test directories exist
+  Should show tests directory with subdirectories
+  - bootstrap
+  - framework
+  - Integration
+  - Unit
+  - WP_Mock
+
+  ```bash
+  ls -la ~/sites/wordpress/wp-content/plugins/your-plugin/tests/
+  ```
+
+### 2. Configuration Files Verification
+
+- [ ] WordPress test configuration exists
+   Should show folders:
+   - data
+   - includes
+   - tests
+   and file
+   - wp-tests-config.php
+
+  ```bash
+  ls -la ~/sites/wordpress/wordpress-phpunit/
+  ```
+
+- [ ] Plugin test configuration exists
+  ```bash
+  # Should show phpunit.xml.dist and bootstrap files
+  ls -la ~/sites/wordpress/wp-content/plugins/your-plugin/tests/
+  ```
+
+- [ ] Environment variables file exists
+  ```bash
+  # Should show .env.testing file
+  ls -la ~/sites/wordpress/wp-content/plugins/your-plugin/
+  ```
+
+### 3. Database Verification
+
+- [ ] Test database exists
+  ```bash
+  # Using Lando
+  lando ssh -c 'mysql -h database -u wordpress -pwordpress -e "SHOW DATABASES;" | grep wordpress_test'
+
+  # Not using Lando
+  mysql -h database -u wordpress -pwordpress -e "SHOW DATABASES;" | grep wordpress_test
+  ```
+
+- [ ] Database connection works
+  ```bash
+  # Using Lando
+  lando ssh -c 'mysql -h database -u wordpress -pwordpress wordpress_test -e "SELECT 1"'
+
+  # Not using Lando
+  mysql -h database -u wordpress -pwordpress wordpress_test -e "SELECT 1"
+  ```
+
+### 4. WordPress Test Suite Verification
+
+- [ ] WordPress test suite files exist
+  ```bash
+  # Should show test files
+  ls -la ~/sites/wordpress/wordpress-phpunit/tests/
+  ```
+
+### 5. PHP Configuration Verification
+
+- [ ] PHP version compatibility
+  ```bash
+  # Should show PHP 7.4 or higher
+  php -v
+  ```
+
+- [ ] Required PHP extensions
+  ```bash
+  # Should include mysqli, dom, and xml
+  php -m | grep -E 'mysqli|dom|xml'
+  ```
+
+  If the mysqli extension is missing, you'll see this error when running tests:
+  ```
+  wp_die() called
+  Message: <p>Your PHP installation appears to be missing the MySQL extension which is required by WordPress.</p>
+  <p>Please check that the <code>mysqli</code> PHP extension is installed and enabled.</p>
+  ```
+
+  **Important Note**: This same error can also appear if your database connection commands are misformed or if quotes aren't properly escaped in SSH commands. If you've verified the mysqli extension is installed but still see this error, check your database connection parameters and command formatting in the setup script.
+
+  To fix this in Lando, you need to ensure the mysqli extension is enabled in your .lando.yml file:
+  ```yaml
+  services:
+    appserver:
+      config:
+        php: ./.lando/php.ini
+  ```
+
+  And in your .lando/php.ini file:
+  ```ini
+  extension=mysqli
+  ```
+
+### 6. Composer Verification
+
+- [ ] Composer is installed
+  ```bash
+  # Should show composer version
+  composer --version
+  ```
+
+- [ ] Required dependencies are installed
+  ```bash
+  # From plugin directory
+  composer show | grep -E 'phpunit|yoast|brain|mockery'
+  ```
+
+### 7. Test Execution Verification
+
+- [ ] PHPUnit can run
+  ```bash
+  # From plugin directory
+  ./vendor/bin/phpunit --version
+  ```
+
+- [ ] Example test passes
+  ```bash
+  # From plugin directory, run a simple test
+  ./vendor/bin/phpunit tests/unit/test-example.php
+  ```
+
 ### Common Database Issues
 
 1. **Wrong hostname**: In Lando, use `database` as the hostname, not `localhost` (unless changed in .lando.yml)
 2. **Incorrect credentials**: Verify username and password
 3. **Missing test database**: Ensure `wordpress_test` database exists, created by phpunit-testing/bin/setup-plugin-tests.php
 4. **Permission issues**: Ensure the user has privileges on the test database
+5. **Quote escaping issues**: SQL commands with double quotes can cause problems when passed through SSH
+
+### SQL Command Quoting Issues
+
+When running SQL commands through SSH (like with Lando), quote escaping becomes critical. Here's an example of a failing command and how to fix it:
+
+**Failing Command**:
+```bash
+lando ssh -c 'mysql -h database -u root -e "CREATE USER IF NOT EXISTS "wordpress"@"%" IDENTIFIED BY "password""'
+```
+
+**Fixed Command**:
+```bash
+lando ssh -c 'mysql -h database -u root -e \
+"CREATE USER IF NOT EXISTS \"wordpress\"@\"%\" IDENTIFIED BY \"password\";  "   '
+```
+
+The key differences:
+- SQL uses double quotes (") in commands
+- SQL commands in command lines, that are enclosed in double quotes, need to have their double quotes escaped with backslashes
+- When passing through SSH, enclose the whole command in single quotes
+- Since in Bash are enclosing the much of the line in single quotes, must escape any single quotes within the command. Example:
+  ```bash
+  lando ssh -c 'COMMAND'
+  ```
+- Adding spaces between command parts can help with readability
+
+If you see MySQL syntax errors or MySQL showing its help text, check your command quoting carefully.
 
 ## Dependency Management
 

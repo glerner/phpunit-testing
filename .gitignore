@@ -37,6 +37,7 @@ Thumbs.db
 /tmp/
 /wordpress/
 /wp-content/
+/tests/wp-tests-config.php
 
 # Test artifacts
 /coverage/
