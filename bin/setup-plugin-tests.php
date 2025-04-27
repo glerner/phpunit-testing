@@ -7,9 +7,9 @@
  * @package WP_PHPUnit_Framework
  */
 
-namespace WP_PHPUnit_Framework;
-
 declare(strict_types=1);
+
+namespace WP_PHPUnit_Framework;
 
 // Exit if accessed directly, should be run command line
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
@@ -848,7 +848,6 @@ EOT;
 
     // Debug information
     echo "Debug: WordPress test directory: $wp_tests_dir\n";
-    echo "Debug: PHP command: php $wp_tests_dir/includes/install.php $wp_tests_dir/wp-tests-config.php\n";
 
     // Check if files exist
     echo "Debug: Checking if files exist:\n";
@@ -884,6 +883,10 @@ EOT;
     if ($targeting_lando) {
         echo "Debug: Using Lando PHP for installation...\n";
         $php_command = "lando php";
+        // When using Lando for WordPress, we use the database in Lando, so we need to use "lando php" and container paths
+        $wp_root = get_setting('WP_ROOT', '/app');
+        $install_path = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit/includes/install.php";
+        $config_path = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit/wp-tests-config.php";
     } else {
         echo "Debug: Using local PHP for installation...\n";
     }
@@ -891,14 +894,37 @@ EOT;
     // Capture output for debugging
     $output = [];
     $command = "$php_command $install_path $config_path 2>&1";
+    echo "Debug: PHP command: $php_command $install_path $config_path\n";
     echo "Debug: Executing: $command\n";
-    $last_line = exec($command, $output, $return_var);
+    exec($command, $output, $return_var);
 
     // Display output
     echo "Debug: Command output:\n";
     echo implode("\n", $output) . "\n";
     echo "Debug: Return code: $return_var\n";
 
+    // Install compatibility files for modern WordPress
+    echo "Installing compatibility files for modern WordPress...\n";
+    
+    // Get the path to the compatibility files
+    $compat_dir = dirname(__DIR__) . '/compat';
+    
+    // Get the filesystem WordPress root path
+    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
+    
+    // Check if WordPress version requires compatibility files
+    // Modern WordPress (6.x+) uses namespaced PHPMailer but the test suite expects the old structure
+    $wp_includes_dir = "$filesystem_wp_root/wp-includes";
+    
+    // Check if class-wp-phpmailer.php exists, if not, copy our compatibility version
+    if (!file_exists("$wp_includes_dir/class-wp-phpmailer.php") && file_exists("$compat_dir/wp-includes/class-wp-phpmailer.php")) {
+        echo "Installing PHPMailer compatibility shim...\n";
+        copy("$compat_dir/wp-includes/class-wp-phpmailer.php", "$wp_includes_dir/class-wp-phpmailer.php");
+        echo "✅ PHPMailer compatibility shim installed\n";
+    } else {
+        echo "PHPMailer compatibility shim not needed or already exists\n";
+    }
+    
     // Clean up
     unlink("$wp_tests_dir/install-wp-tests.php");
 
@@ -1047,6 +1073,7 @@ if (empty($wp_root)) {
     }
 } else {
     echo "Using WordPress root from settings: $wp_root\n";
+    echo "Using Filesystem path: $filesystem_wp_root\n";
 }
 
 // Get WordPress configuration path
@@ -1171,7 +1198,7 @@ echo "  - Filesystem path: $filesystem_wp_root\n";
 
 // Set up WordPress test suite directory
 // Always use the detected WordPress root to build the test directory path
-$wp_tests_dir = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
+$wp_tests_dir = "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
 echo "Using WordPress test directory: $wp_tests_dir\n";
 
 // If --remove-all flag is set, remove test suite and exit

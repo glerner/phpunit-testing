@@ -198,6 +198,87 @@ function get_phpunit_database_settings(
 5. Return the PHPUnit database settings
 
 
+### `install_test_suite()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+namespace WP_PHPUnit_Framework;
+
+function install_test_suite(
+    string $wp_tests_dir,
+    string $db_name,
+    string $db_user,
+    string $db_pass,
+    string $db_host
+): bool
+```
+
+**Purpose**: Installs the WordPress test suite by creating the test database, configuring the test environment, and running the WordPress test installer script.
+
+**Requirements**:
+- Requires `get_setting('WP_ROOT')` to retrieve the container path when running in Lando
+- Requires `get_setting('FILESYSTEM_WP_ROOT')` for filesystem paths when not in Lando
+- Requires `$targeting_lando` variable to determine if running in a Lando environment
+- MySQL command-line client must be available in the environment
+
+**Parameters**:
+- `$wp_tests_dir`: Directory where tests are installed
+  - Type: string
+  - Required: Yes
+  - Example: '/path/to/wordpress/wp-content/plugins/wordpress-develop/tests/phpunit'
+
+- `$db_name`: Database name for tests
+  - Type: string
+  - Required: Yes
+  - Example: 'wordpress_test'
+
+- `$db_user`: Database username
+  - Type: string
+  - Required: Yes
+  - Example: 'wordpress'
+
+- `$db_pass`: Database password
+  - Type: string
+  - Required: Yes
+
+- `$db_host`: Database host
+  - Type: string
+  - Required: Yes
+  - Example: 'localhost'
+
+**Return Value**:
+- Type: bool
+- True if installation was successful, false otherwise
+
+**Error Handling**:
+- Checks if MySQL command is available
+- Validates database connection before proceeding
+- Verifies that test files exist after installation
+- Provides detailed debug output for troubleshooting
+
+**Logic Flow**:
+1. Verify database connection
+2. Create test database if it doesn't exist
+3. Generate WordPress test installation script
+4. Execute installation script using appropriate PHP command (local or Lando)
+5. Clean up temporary files
+6. Return success/failure status
+
+**Important Design Considerations**:
+- Path handling strategy:
+  - For filesystem operations (creating directories, writing files), use filesystem paths
+  - For operations inside Lando (database access, PHP execution), use container paths
+- Handles both local and Lando environments appropriately
+  - When using a Lando WordPress setup, must run the PHPUnit test installation script with `lando php` (not `php`), because that script accesses databases that are defined in the Lando container
+- Database operations:
+  - Creates a separate test database if it doesn't exist
+  - Validates database connection before attempting installation
+  - Uses the same database credentials as WordPress but with a different database name
+- Provides extensive debugging information for troubleshooting
+
+
 ### `get_setting()`
 
 **Location**: `/bin/setup-plugin-tests.php`
