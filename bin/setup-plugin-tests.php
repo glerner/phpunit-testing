@@ -4,14 +4,14 @@
  *
  * Set up the WordPress test environment for PHPUnit testing.
  *
- * @package GL_PHPUnit_Testing
+ * @package WP_PHPUnit_Framework
  */
+
+namespace WP_PHPUnit_Framework;
 
 declare(strict_types=1);
 
-// This is a test edit
-
-// Exit if accessed directly
+// Exit if accessed directly, should be run command line
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
     exit;
 }
@@ -34,6 +34,16 @@ define('COLOR_MAGENTA', "\033[35m");
 define('COLOR_CYAN', "\033[36m");
 define('COLOR_WHITE', "\033[37m");
 define('COLOR_BOLD', "\033[1m");
+
+// Global exception handler to catch and display any uncaught exceptions
+set_exception_handler(function(\Throwable $e) {
+    echo "\n" . COLOR_RED . "UNCAUGHT EXCEPTION: " . get_class($e) . COLOR_RESET . "\n";
+    echo COLOR_RED . "Message: " . $e->getMessage() . COLOR_RESET . "\n";
+    echo COLOR_RED . "File: " . $e->getFile() . " (Line " . $e->getLine() . ")" . COLOR_RESET . "\n";
+    echo COLOR_RED . "Stack trace:" . COLOR_RESET . "\n";
+    echo $e->getTraceAsString() . "\n";
+    exit(1);
+});
 
 /**
  * Load settings from .env.testing file
@@ -97,6 +107,161 @@ function get_setting(string $name, $default = null) {
     return $default;
 }
 
+/**
+ * Retrieves WordPress database connection settings from multiple sources in a specific priority order.
+ * Its purpose is to determine the database settings (host, user, password, name, and table prefix)
+ * that should be used for WordPress plugin testing.
+ *
+ * Priority Order:
+ * 1. wp-config.php (lowest priority)
+ * 2. Config file (.env.testing by default)
+ * 3. Environment variables
+ * 4. Lando configuration (highest priority)
+ *
+ * Note: The table_prefix is only read by WordPress from wp-config.php and cannot be overridden.
+ *
+ * @param string $wp_config_path Path to WordPress configuration file
+ * @param array $lando_info Lando environment configuration, obtained by executing 'lando info' command
+ * @param string $config_file_name Name of the configuration file (default: '.env.testing')
+ * @return array Database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
+ * @throws Exception If wp-config.php doesn't exist or if any required database settings are missing
+ */
+function get_database_settings(
+    string $wp_config_path,
+    array $lando_info = [],
+    string $config_file_name = '.env.testing'
+): array {
+    // Initialize with not set values
+    $db_settings = [
+        'db_host' => '[not set]',
+        'db_user' => '[not set]',
+        'db_pass' => '[not set]',
+        'db_name' => '[not set]',
+        'table_prefix' => 'wp_' // Default WordPress table prefix
+    ];
+
+    // 1. Load from wp-config.php (lowest priority)
+    if (file_exists($wp_config_path)) {
+        echo "Reading database settings from wp-config.php...\n";
+
+        // Include the wp-config.php file directly
+        try {
+            // Suppress warnings/notices that might come from wp-config.php
+            @include_once $wp_config_path;
+
+            // Get the database settings from the constants
+            if (defined('DB_NAME') && DB_NAME) {
+                $db_settings['db_name'] = DB_NAME;
+            }
+
+            if (defined('DB_USER') && DB_USER) {
+                $db_settings['db_user'] = DB_USER;
+            }
+
+            if (defined('DB_PASSWORD')) { // Password can be empty
+                $db_settings['db_pass'] = DB_PASSWORD;
+            }
+
+            if (defined('DB_HOST') && DB_HOST) {
+                $db_settings['db_host'] = DB_HOST;
+            }
+
+            // Get the table prefix from the global variable
+            global $table_prefix;
+            if (isset($table_prefix)) {
+                $db_settings['table_prefix'] = $table_prefix;
+            }
+        } catch (\Exception $e) {
+            echo COLOR_YELLOW . "Warning: Error including $wp_config_path: {$e->getMessage()}" . COLOR_RESET . "\n";
+        }
+    }
+
+    // 2. Load from config file (e.g., .env, .env.testing)
+    $env_file_db_host = get_setting('WP_TESTS_DB_HOST', null);
+    $env_file_db_user = get_setting('WP_TESTS_DB_USER', null);
+    $env_file_db_pass = get_setting('WP_TESTS_DB_PASSWORD', null);
+    $env_file_db_name = get_setting('WP_TESTS_DB_NAME', null);
+
+    if ($env_file_db_host) $db_settings['db_host'] = $env_file_db_host;
+    if ($env_file_db_user) $db_settings['db_user'] = $env_file_db_user;
+    if ($env_file_db_pass !== null) $db_settings['db_pass'] = $env_file_db_pass; // Password can be empty
+    if ($env_file_db_name) $db_settings['db_name'] = $env_file_db_name;
+    // Note: table_prefix is only read from wp-config.php and not from environment variables or config files
+
+    // 3. Load from environment variables
+    $env_var_db_host = getenv('WP_TESTS_DB_HOST');
+    $env_var_db_user = getenv('WP_TESTS_DB_USER');
+    $env_var_db_pass = getenv('WP_TESTS_DB_PASSWORD');
+    $env_var_db_name = getenv('WP_TESTS_DB_NAME');
+
+    if ($env_var_db_host !== false && $env_var_db_host) $db_settings['db_host'] = $env_var_db_host;
+    if ($env_var_db_user !== false && $env_var_db_user) $db_settings['db_user'] = $env_var_db_user;
+    if ($env_var_db_pass !== false) $db_settings['db_pass'] = $env_var_db_pass; // Password can be empty
+    if ($env_var_db_name !== false && $env_var_db_name) $db_settings['db_name'] = $env_var_db_name;
+    // Note: table_prefix is only read from wp-config.php and not from environment variables
+
+    // 4. Load from Lando configuration (highest priority)
+    if (!empty($lando_info)) {
+        echo "Getting Lando internal configuration...\n";
+
+        // Find the database service
+        $db_service = null;
+        foreach ($lando_info as $service_name => $service_info) {
+            if (isset($service_info['type']) && $service_info['type'] === 'mysql') {
+                $db_service = $service_info;
+                break;
+            }
+        }
+
+        // If we found a database service, use its credentials
+        if ($db_service !== null && isset($db_service['creds'])) {
+            $creds = $db_service['creds'];
+
+            // In Lando, we trust the Lando configuration completely
+            if (isset($db_service['internal_connection']['host'])) {
+                $db_settings['db_host'] = $db_service['internal_connection']['host'];
+            }
+            if (isset($creds['user'])) {
+                $db_settings['db_user'] = $creds['user'];
+            }
+            if (isset($creds['password'])) {
+                $db_settings['db_pass'] = $creds['password'];
+            }
+            if (isset($creds['database'])) {
+                $db_settings['db_name'] = $creds['database'];
+            }
+
+            echo "Found Lando database service: {$db_settings['db_host']}\n";
+            // Note: table_prefix is only read from wp-config.php and not from Lando configuration
+        } else {
+            echo COLOR_YELLOW . "Warning: No MySQL service found in Lando configuration." . COLOR_RESET . "\n";
+            echo "This indicates a potential issue with your Lando setup.\n";
+        }
+    }
+
+    // Check if we have all required settings
+    $missing_settings = [];
+    foreach ($db_settings as $key => $value) {
+        if ($value === '[not set]') {
+            $missing_settings[] = strtoupper($key);
+        }
+    }
+
+    if (!empty($missing_settings)) {
+        $missing_str = implode(', ', $missing_settings);
+        throw new \Exception("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php.");
+    }
+
+    // Display the final settings
+    echo "Database settings (final):\n";
+    echo "- Host: {$db_settings['db_host']}\n";
+    echo "- User: {$db_settings['db_user']}\n";
+    echo "- Database: {$db_settings['db_name']}\n";
+    echo "- Password length: " . strlen($db_settings['db_pass']) . "\n";
+
+    return $db_settings;
+}
+
 // Load settings from .env.testing
 $loaded_settings = load_settings_file();
 
@@ -138,9 +303,10 @@ function format_ssh_command(string $ssh_command, string $command): string {
  * @param string $pass Database password
  * @param string $sql SQL command to execute
  * @param string|null $db Optional database name to use
+ * @param string $command_type The type of command ('lando_direct', 'ssh', or 'direct')
  * @return string Formatted MySQL command
  */
-function format_mysql_command(string $host, string $user, string $pass, string $sql, ?string $db = null): string {
+function format_mysql_command(string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'ssh'): string {
     // Build the connection parameters
     $connection_params = "-h $host -u $user";
 
@@ -166,11 +332,19 @@ function format_mysql_command(string $host, string $user, string $pass, string $
     // 3. For multiline SQL (like heredoc), replace newlines with spaces
     $sql = str_replace("\n", " ", $sql);
 
-    // 4. Escape quotes in SQL for shell compatibility
-    // We're using single quotes for the -e parameter, so we need to escape any single quotes in the SQL
-    // We also need to escape double quotes for the shell
-    $escaped_sql = str_replace("'", "\\'", $sql);
-    $escaped_sql = str_replace('"', '\\"', $escaped_sql);
+    // 4. Escape quotes in SQL based on command type
+    $escaped_sql = $sql;
+
+    // Different escaping rules based on command type
+    if ($command_type === 'lando_direct') {
+        // For direct lando mysql command, we only need to escape single quotes
+        // Double quotes don't need double-escaping
+        $escaped_sql = str_replace("'", "'\\'", $sql);
+    } else {
+        // For SSH or direct MySQL, escape both single and double quotes
+        $escaped_sql = str_replace("'", "\\'", $sql);
+        $escaped_sql = str_replace('"', '\\"', $escaped_sql);
+    }
 
     // Add the SQL command with proper quoting
     $formatted_command = "$connection_params -e '$escaped_sql'";
@@ -196,25 +370,35 @@ function format_mysql_command(string $host, string $user, string $pass, string $
  * @return string The fully formatted command ready to execute
  */
 function format_mysql_execution(string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null): string {
-    // Format the MySQL parameters
-    $mysql_params = format_mysql_command($host, $user, $pass, $sql, $db);
+    $command_type = 'ssh';
+
+    // Determine the command type based on the SSH command
+    if (strpos($ssh_command, 'lando ssh') === 0) {
+        $command_type = 'lando_direct';
+    } elseif (!$ssh_command || $ssh_command === 'none') {
+        $command_type = 'direct';
+    }
+
+    // Format the MySQL parameters with the appropriate command type
+    $mysql_params = format_mysql_command($host, $user, $pass, $sql, $db, $command_type);
 
     // Debug output
     echo "\nDebug: format_mysql_execution input:\n";
     echo "SSH command: $ssh_command\n";
     echo "MySQL params: $mysql_params\n";
     echo "Original SQL: $sql\n";
+    echo "Command type: $command_type\n";
 
     $cmd = '';
 
     // Check if this is a Lando environment and we should use lando mysql directly
-    if (strpos($ssh_command, 'lando ssh') === 0) {
+    if ($command_type === 'lando_direct') {
         // Use lando mysql directly with the parameters
         $cmd = "lando mysql $mysql_params 2>&1";
         echo "Debug: Using direct Lando MySQL format\n";
     }
     // Use SSH to execute MySQL
-    elseif ($ssh_command && $ssh_command !== 'none') {
+    elseif ($command_type === 'ssh') {
         // Use the SSH command function for other SSH commands
         $cmd = format_ssh_command($ssh_command, "mysql $mysql_params");
     }
@@ -301,6 +485,7 @@ function get_wp_config_value(string $search_value, string $wp_config_path): ?str
  * @return array|null Lando configuration or null if not in Lando environment
  */
 function parse_lando_info(): ?array {
+
     $lando_info = getenv('LANDO_INFO');
     if (empty($lando_info)) {
         return null;
@@ -494,12 +679,6 @@ function install_test_suite(
     string $db_pass,
     string $db_host
 ): bool {
-    // Get database settings from environment variables if available
-    // Get database settings with priority order
-    $db_host = get_setting('WP_TESTS_DB_HOST', $db_host);
-    $db_user = get_setting('WP_TESTS_DB_USER', $db_user);
-    $db_pass = get_setting('WP_TESTS_DB_PASSWORD', $db_pass);
-    $db_name = get_setting('WP_TESTS_DB_NAME', $db_name);
     echo "Setting up test database...\n";
     echo "Debug: Database parameters:\n";
     echo "  Host: $db_host\n";
@@ -543,15 +722,6 @@ function install_test_suite(
 
     if ($targeting_lando) {
         echo "Using standard Lando database configuration...\n";
-
-        // For Lando environments, use standard database settings
-        // These are the default values in a standard Lando WordPress setup
-
-        // Use get_setting with fallbacks for Lando environment
-        $db_host = get_setting('WP_TESTS_DB_HOST', 'database');
-        $db_user = get_setting('WP_TESTS_DB_USER', 'wordpress');
-        $db_pass = get_setting('WP_TESTS_DB_PASSWORD', 'wordpress');
-
         echo "Host: $db_host, User: $db_user, Password: $db_pass\n";
     }
 
@@ -675,7 +845,59 @@ EOT;
 
     // Execute the PHP script
     echo "Running WordPress test installation...\n";
-    system("php $wp_tests_dir/includes/install.php $wp_tests_dir/wp-tests-config.php", $return_var);
+
+    // Debug information
+    echo "Debug: WordPress test directory: $wp_tests_dir\n";
+    echo "Debug: PHP command: php $wp_tests_dir/includes/install.php $wp_tests_dir/wp-tests-config.php\n";
+
+    // Check if files exist
+    echo "Debug: Checking if files exist:\n";
+    echo "- install.php exists: " . (file_exists("$wp_tests_dir/includes/install.php") ? 'Yes' : 'No') . "\n";
+    echo "- wp-tests-config.php exists: " . (file_exists("$wp_tests_dir/wp-tests-config.php") ? 'Yes' : 'No') . "\n";
+
+    // Check database configuration in wp-tests-config.php
+    if (file_exists("$wp_tests_dir/wp-tests-config.php")) {
+        echo "Debug: Checking database configuration in wp-tests-config.php\n";
+        $config_content = file_get_contents("$wp_tests_dir/wp-tests-config.php");
+
+        // Extract database settings
+        preg_match("/define\s*\(\s*['\"]DB_NAME['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)/", $config_content, $db_name_match);
+        preg_match("/define\s*\(\s*['\"]DB_USER['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)/", $config_content, $db_user_match);
+        preg_match("/define\s*\(\s*['\"]DB_HOST['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)/", $config_content, $db_host_match);
+
+        echo "- DB_NAME: " . ($db_name_match[1] ?? 'Not found') . "\n";
+        echo "- DB_USER: " . ($db_user_match[1] ?? 'Not found') . "\n";
+        echo "- DB_HOST: " . ($db_host_match[1] ?? 'Not found') . "\n";
+
+        // Check if the database settings match what we expect
+        echo "Debug: Comparing with our database settings:\n";
+        echo "- Our DB_NAME: $db_name\n";
+        echo "- Our DB_USER: $db_user\n";
+        echo "- Our DB_HOST: $db_host\n";
+    }
+
+    // Determine which PHP to use based on environment
+    $php_command = "php";
+    $install_path = "$wp_tests_dir/includes/install.php";
+    $config_path = "$wp_tests_dir/wp-tests-config.php";
+
+    if ($targeting_lando) {
+        echo "Debug: Using Lando PHP for installation...\n";
+        $php_command = "lando php";
+    } else {
+        echo "Debug: Using local PHP for installation...\n";
+    }
+
+    // Capture output for debugging
+    $output = [];
+    $command = "$php_command $install_path $config_path 2>&1";
+    echo "Debug: Executing: $command\n";
+    $last_line = exec($command, $output, $return_var);
+
+    // Display output
+    echo "Debug: Command output:\n";
+    echo implode("\n", $output) . "\n";
+    echo "Debug: Return code: $return_var\n";
 
     // Clean up
     unlink("$wp_tests_dir/install-wp-tests.php");
@@ -801,28 +1023,15 @@ if (!check_system_requirements()) {
 $plugin_dir = PROJECT_DIR;
 $plugin_slug = basename($plugin_dir);
 
-// Check if we're running in a Lando environment
-$lando_info = getenv('LANDO_INFO');
-$in_lando = $lando_info !== false;
+// Load all settings once at the beginning
 
-// This script should be run from the host machine, not inside Lando
-if ($in_lando) {
-    echo COLOR_RED . "ERROR: This script should NOT be run from inside a Lando container!" . COLOR_RESET . "\n";
-    echo "Please run this script from your host machine instead.\n";
-    echo "The script will use 'lando ssh' automatically for database operations\n";
-    echo "based on your SSH_COMMAND setting in .env.testing.\n";
-    exit(1);
-}
+// WordPress paths
+$wp_root = get_setting('WP_ROOT', '[not set]'); // Container path (/app)
+$filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '[not set]'); // Host path
+$wp_tests_dir_setting = get_setting('WP_TESTS_DIR', '[not set]'); // WordPress test directory
 
-// Get WordPress root path from settings
-$wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
-
-// Get database settings from environment variables if available
-// These will be used as the highest priority source for database settings
-$env_db_host = get_setting('WP_TESTS_DB_HOST', '');
-$env_db_user = get_setting('WP_TESTS_DB_USER', '');
-$env_db_pass = get_setting('WP_TESTS_DB_PASSWORD', '');
-$env_db_name = get_setting('WP_TESTS_DB_NAME', '');
+// SSH command for database operations
+$ssh_command = get_setting('SSH_COMMAND', 'none');
 
 // For local environment, try to find WordPress root if not specified in settings
 if (empty($wp_root)) {
@@ -840,128 +1049,130 @@ if (empty($wp_root)) {
     echo "Using WordPress root from settings: $wp_root\n";
 }
 
-// Get WordPress configuration
+// Get WordPress configuration path
 $wp_config_path = "$wp_root/wp-config.php";
-if (file_exists($wp_config_path)) {
-    echo "Reading WordPress configuration from $wp_config_path\n";
-    $db_name = get_wp_config_value('DB_NAME', $wp_config_path) ?: 'wordpress_test';
-    $db_user = get_wp_config_value('DB_USER', $wp_config_path) ?: 'root';
-    $db_pass = get_wp_config_value('DB_PASSWORD', $wp_config_path) ?: '';
-    $db_host = get_wp_config_value('DB_HOST', $wp_config_path) ?: 'localhost';
-} else {
-    echo "Warning: wp-config.php not found at $wp_config_path\n";
-    // Fallback values
-    $db_name = 'wordpress_test';
-    $db_user = 'root';
-    $db_pass = '';
-    $db_host = 'localhost';
-}
 
-// Override with Lando database configuration if available
-if ($in_lando) {
-    echo "Getting Lando internal configuration...\n";
-
-    // Find the database service
-    $db_service = null;
-    foreach ($lando_info as $service_name => $service_info) {
-        if (isset($service_info['type']) && ($service_info['type'] === 'mysql' || $service_info['type'] === 'mariadb')) {
-            $db_service = $service_info;
-            break;
-        }
+/**
+ * Get Lando information by running the 'lando info' command
+ * This works when running from outside a Lando container
+ *
+ * @return array Lando information or empty array if Lando is not running
+ */
+function get_lando_info(): array {
+    // Check if lando command exists
+    $lando_exists = shell_exec('which lando 2>/dev/null');
+    if (empty($lando_exists)) {
+        echo "Lando command not found. Skipping Lando configuration.\n";
+        return [];
     }
 
-    if ($db_service !== null) {
-        // Environment variables were already loaded at the script level
+    // Run lando info command
+    echo "Checking for Lando configuration...\n";
+    $lando_info_json = shell_exec('lando info --format=json 2>/dev/null');
+    if (empty($lando_info_json)) {
+        echo "No Lando configuration found. Is Lando running? (`lando start` command, if should be running)\n";
+        return [];
+    }
 
-        // First try environment variables (highest priority)
-        if ($env_db_host !== false) {
-            $db_host = $env_db_host;
-        } elseif (isset($db_service['internal_connection']['host'])) {
-            // Then try Lando info
-            $db_host = $db_service['internal_connection']['host'];
-        } else {
-            // Final fallback
-            $db_host = 'database';
-        }
+    // Parse JSON output
+    $lando_info = json_decode($lando_info_json, true);
+    if (json_last_error() !== JSON_ERROR_NONE || empty($lando_info)) {
+        echo "Error parsing Lando configuration. Skipping Lando settings.\n";
+        return [];
+    }
 
-        // Get credentials - first from environment variables
-        if ($env_db_user !== false) {
-            $db_user = $env_db_user;
-        } elseif (isset($db_service['creds']['user'])) {
-            // Then from Lando info
-            $db_user = $db_service['creds']['user'];
-        }
+    echo "Found Lando configuration.\n";
+    return $lando_info;
+}
 
-        if ($env_db_pass !== false) {
-            $db_pass = $env_db_pass;
-        } elseif (isset($db_service['creds']['password'])) {
-            // Then from Lando info
-            $db_pass = $db_service['creds']['password'];
-        }
+// Get Lando info by executing 'lando info' command
+$lando_info_array = get_lando_info();
+if (!empty($lando_info_array)) {
+    echo "Using Lando database configuration for WordPress testing.\n";
+}
 
-        // Get database name from environment or use default
-        if ($env_db_name !== false) {
-            $db_name = $env_db_name;
-        } else {
-            // Use the actual database name for tests
-            $db_name = "wordpress_test";
-        }
+/**
+ * Configure PHPUnit database settings based on WordPress database settings
+ *
+ * @param array $wp_db_settings WordPress database settings from get_database_settings()
+ * @param string|null $test_db_name Complete database name for tests (default: null, will use WP db name + '_test')
+ * @param string|null $test_table_prefix Table prefix for tests (default: null, will use WordPress table prefix)
+ * @return array PHPUnit database settings
+ */
+function get_phpunit_database_settings(
+    array $wp_db_settings,
+    ?string $test_db_name = null,
+    ?string $test_table_prefix = null
+): array {
+    // Start with WordPress database settings
+    $phpunit_db_settings = $wp_db_settings;
 
-        echo "Using Lando database configuration:\n";
-        echo "  Host: $db_host\n";
-        echo "  User: $db_user\n";
-        echo "  Test Database will be: $db_name\n";
-
-        // Override paths for Lando environment
-        $wp_root = "/app";
-        $wp_config_path = "$wp_root/wp-config.php";
+    // Set database name for tests
+    if ($test_db_name !== null) {
+        // Use specified test database name
+        $phpunit_db_settings['db_name'] = $test_db_name;
     } else {
-        echo COLOR_YELLOW . "WARNING: Database service not found in Lando configuration!" . COLOR_RESET . "\n";
-        echo "This indicates a potential issue with your Lando setup.\n";
-        echo "Please check that your .lando.yml file has a valid database service configured.\n";
-        echo "Example configuration:\n";
-        echo "  database:\n";
-        echo "    type: mysql:8.0\n";
-        echo "    healthcheck: mysql -uroot --silent --execute \"SHOW DATABASES;\"\n\n";
-
-        // Continue with the current database settings
-        echo "Current database settings being used:\n";
-        echo "  Host: $db_host\n";
-        echo "  User: $db_user\n";
-        echo "  Password: [hidden]\n";
-        echo "  Test Database: $db_name\n\n";
-
-        echo "Using default Lando database configuration:\n";
-        echo "  Host: $db_host\n";
-        echo "  User: $db_user\n";
-        echo "  Test Database will be: $db_name\n";
-
-        // Override paths for Lando environment
-        $wp_root = "/app";
-        $wp_config_path = "$wp_root/wp-config.php";
+        // Default: append '_test' to WordPress database name
+        $phpunit_db_settings['db_name'] = $wp_db_settings['db_name'] . '_test';
     }
+
+    // Set table prefix for tests
+    if ($test_table_prefix !== null) {
+        // Use specified test table prefix
+        $phpunit_db_settings['table_prefix'] = $test_table_prefix;
+    }
+    // else: keep WordPress table prefix (already in $phpunit_db_settings)
+
+    echo "PHPUnit database settings:\n";
+    echo "  - Host: {$phpunit_db_settings['db_host']}\n";
+    echo "  - User: {$phpunit_db_settings['db_user']}\n";
+    echo "  - Database: {$phpunit_db_settings['db_name']}\n";
+    echo "  - Table prefix: {$phpunit_db_settings['table_prefix']}\n";
+
+    return $phpunit_db_settings;
 }
+
+// Get WordPress database settings
+$wp_db_settings = get_database_settings($wp_config_path, $lando_info_array);
+
+// Get custom PHPUnit database settings from environment variables
+$test_db_name = get_setting('WP_PHPUNIT_DB_NAME', null);
+$test_table_prefix = get_setting('WP_PHPUNIT_TABLE_PREFIX', null);
+
+// Get PHPUnit database settings
+$phpunit_db_settings = get_phpunit_database_settings($wp_db_settings, $test_db_name, $test_table_prefix);
+
+// Extract database settings for use in the script
+$db_host = $phpunit_db_settings['db_host'];
+$db_user = $phpunit_db_settings['db_user'];
+$db_pass = $phpunit_db_settings['db_pass'];
+$db_name = $phpunit_db_settings['db_name'];
 
 // Validate that we have a proper WordPress installation
-if (!file_exists("$wp_root/wp-includes") || !file_exists("$wp_root/wp-admin") || !file_exists("$wp_root/wp-content")) {
-    echo COLOR_RED . "ERROR: The detected WordPress root ($wp_root) does not appear to be a valid WordPress installation." . COLOR_RESET . "\n";
+// Always use filesystem_wp_root for validation since that's the path on the host machine
+$validation_path = $filesystem_wp_root;
+
+if (!file_exists("$validation_path/wp-includes") || !file_exists("$validation_path/wp-admin") || !file_exists("$validation_path/wp-content")) {
+    echo COLOR_RED . "ERROR: The detected WordPress root does not appear to be a valid WordPress installation." . COLOR_RESET . "\n";
     echo "Could not find one or more of the following directories:\n";
-    echo "  - $wp_root/wp-includes\n";
-    echo "  - $wp_root/wp-admin\n";
-    echo "  - $wp_root/wp-content\n\n";
-    echo "Please ensure you're running this script from within a WordPress plugin directory.\n";
+    echo "  - $validation_path/wp-includes\n";
+    echo "  - $validation_path/wp-admin\n";
+    echo "  - $validation_path/wp-content\n\n";
+    echo "Please check your configuration:\n";
+    echo "  - WP_ROOT: $wp_root\n";
+    echo "  - FILESYSTEM_WP_ROOT: $filesystem_wp_root\n\n";
+    echo "When running in WordPress in Lando, FILESYSTEM_WP_ROOT should be the path on your host machine; WP_ROOT should be the path in the container.\n";
     exit(1);
 }
 
-echo COLOR_GREEN . "✅ Valid WordPress installation detected at: $wp_root" . COLOR_RESET . "\n";
+echo COLOR_GREEN . "✅ Valid WordPress installation detected" . COLOR_RESET . "\n";
+echo "  - Container path: $wp_root\n";
+echo "  - Filesystem path: $filesystem_wp_root\n";
 
 // Set up WordPress test suite directory
 // Always use the detected WordPress root to build the test directory path
 $wp_tests_dir = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
 echo "Using WordPress test directory: $wp_tests_dir\n";
-
-// Get SSH command if available
-$ssh_command = get_setting('SSH_COMMAND', '');
 
 // If --remove-all flag is set, remove test suite and exit
 if ($remove_all) {
