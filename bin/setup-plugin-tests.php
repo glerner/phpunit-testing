@@ -74,7 +74,6 @@ function load_settings_file(): array {
                     $value = $matches[2];
                 }
 
-                putenv("$key=$value");
                 $settings[$key] = $value;
             }
         }
@@ -350,10 +349,10 @@ function format_mysql_command(string $host, string $user, string $pass, string $
     $formatted_command = "$connection_params -e '$escaped_sql'";
 
     // Debug: Show the transformation of the SQL command
-    echo "\nDebug: format_mysql_command details:\n";
-    echo "Original SQL:\n$sql\n";
-    echo "Escaped SQL:\n$escaped_sql\n";
-    echo "Full MySQL command:\n$formatted_command\n";
+    # echo "\nDebug: format_mysql_command details:\n";
+    # echo "Original SQL:\n$sql\n";
+    # echo "Escaped SQL:\n$escaped_sql\n";
+    # echo "Full MySQL command:\n$formatted_command\n";
 
     return $formatted_command;
 }
@@ -383,11 +382,10 @@ function format_mysql_execution(string $ssh_command, string $host, string $user,
     $mysql_params = format_mysql_command($host, $user, $pass, $sql, $db, $command_type);
 
     // Debug output
-    echo "\nDebug: format_mysql_execution input:\n";
-    echo "SSH command: $ssh_command\n";
-    echo "MySQL params: $mysql_params\n";
+    # echo "\nDebug: format_mysql_execution input:\n";
     echo "Original SQL: $sql\n";
-    echo "Command type: $command_type\n";
+    echo "SSH command: $ssh_command  MySQL params: $mysql_params\n";
+    # echo "Command type: $command_type\n";
 
     $cmd = '';
 
@@ -409,7 +407,6 @@ function format_mysql_execution(string $ssh_command, string $host, string $user,
         echo "Debug: Using direct MySQL format\n";
     }
 
-    echo "Debug: Final command: $cmd\n";
     return $cmd;
 }
 
@@ -905,17 +902,17 @@ EOT;
 
     // Install compatibility files for modern WordPress
     echo "Installing compatibility files for modern WordPress...\n";
-    
+
     // Get the path to the compatibility files
     $compat_dir = dirname(__DIR__) . '/compat';
-    
+
     // Get the filesystem WordPress root path
     $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
-    
+
     // Check if WordPress version requires compatibility files
     // Modern WordPress (6.x+) uses namespaced PHPMailer but the test suite expects the old structure
     $wp_includes_dir = "$filesystem_wp_root/wp-includes";
-    
+
     // Check if class-wp-phpmailer.php exists, if not, copy our compatibility version
     if (!file_exists("$wp_includes_dir/class-wp-phpmailer.php") && file_exists("$compat_dir/wp-includes/class-wp-phpmailer.php")) {
         echo "Installing PHPMailer compatibility shim...\n";
@@ -924,7 +921,7 @@ EOT;
     } else {
         echo "PHPMailer compatibility shim not needed or already exists\n";
     }
-    
+
     // Clean up
     unlink("$wp_tests_dir/install-wp-tests.php");
 
@@ -1241,7 +1238,6 @@ if (!install_test_suite($wp_tests_dir, $db_name, $db_user, $db_pass, $db_host)) 
 $lando_path = exec('which lando');
 if (!empty($lando_path)) {
     echo "Setting permissions using Lando...\n";
-    chdir($wp_root);
     system("lando ssh -c 'chown -R www-data:www-data /app/wp-content/plugins/$plugin_slug'");
 } else {
     echo "Please set appropriate permissions for your environment on: $plugin_dir\n";
