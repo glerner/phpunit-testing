@@ -929,6 +929,38 @@ function get_setting(string $name, $default = null)
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
 - Test directory: `../tests/Integration`
 
+## Code Quality Scripts
+
+### `phpcbf.sh`
+
+**Location**: `/bin/phpcbf.sh`
+
+**Purpose**: Runs PHPCBF with practical exclusions that focus on functional issues rather than minor formatting concerns.
+
+**Usage**:
+```bash
+./bin/phpcbf.sh [options] [<file>...]
+```
+
+**Examples**:
+- `./bin/phpcbf.sh` - Run on all files
+- `./bin/phpcbf.sh src/Integration/` - Run on specific directory
+- `./bin/phpcbf.sh --report-file=report.txt` - Save report to file
+
+**Excluded Rules**:
+- `Squiz.Commenting.InlineComment` - Comment formatting rules
+- `PEAR.Functions.FunctionCallSignature` - Spacing in function calls
+- `Generic.Formatting.MultipleStatementAlignment` - Alignment of assignments
+- `WordPress.Arrays.ArrayIndentation` - Array indentation rules
+- `WordPress.WhiteSpace.OperatorSpacing` - Spacing around operators
+- `WordPress.WhiteSpace.ControlStructureSpacing` - Spacing in control structures
+- `WordPress.PHP.YodaConditions` - Requiring Yoda conditions
+
+**Behavior**:
+1. First runs the `spaces_to_tabs` Composer script to convert spaces to tabs
+2. Then runs PHPCBF with the excluded rules
+3. Passes through any additional arguments to PHPCBF
+
 ### `phpunit-framework-tests.xml.dist`
 
 **Location**: `/config/phpunit-framework-tests.xml.dist`

@@ -7,7 +7,7 @@ A modular, reusable testing framework for WordPress plugins and themes that prov
 
 ## Overview
 
-This repository contains a comprehensive testing framework designed specifically for WordPress development. It provides base test classes, directory structures, and configuration files that can be easily integrated into any WordPress plugin or theme project.
+This repository contains a comprehensive testing framework designed specifically for WordPress development. It provides base test classes, directory structures, and configuration files for PHPUnit testing and Code Quality Tools that can be easily integrated into any WordPress plugin or theme project.
 
 ## Features
 
@@ -43,7 +43,7 @@ This repository contains a comprehensive testing framework designed specifically
 
 - PHP 8.1 or higher
 - PHPUnit 9.x (Note: As of April 2025, PHPUnit 10.x is not supported due to incompatibility with Yoast PHPUnit Polyfills)
-- WordPress 6.0 or higher (for integration tests)
+- WordPress 6.1 or higher (for integration tests)
 - Composer
 
 ## Why Separate Test Types?

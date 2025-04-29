@@ -26,24 +26,46 @@
         <exclude name="WordPress.Files.FileName"/>
         <exclude name="WordPress.WP.I18n"/>
         <exclude name="WordPress.WP.GlobalVariablesOverride"/>
+        
+        <!-- Exclude minor formatting rules that don't affect functionality -->
+        <exclude name="Squiz.Commenting.InlineComment.InvalidEndChar"/>
+        <exclude name="PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket"/>
+        <exclude name="PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket"/>
+        <exclude name="Generic.Formatting.MultipleStatementAlignment"/>
+        <exclude name="WordPress.Arrays.ArrayIndentation"/>
+        <exclude name="WordPress.WhiteSpace.OperatorSpacing"/>
+        <!-- Exclude spaces-to-tabs conversion to prevent PHPCBF from getting stuck -->
+        <exclude name="Generic.WhiteSpace.DisallowSpaceIndent"/>
     </rule>
 
     <!-- Include PSR-12 Coding Standards -->
     <rule ref="PSR12">
-        <!-- Any PSR12 exclusions would go here -->
+        <!-- Exclude PSR-12 indentation rule (should indent with spaces) to avoid conflict with WordPress rule (only indent with tabs) -->
+        <exclude name="Generic.WhiteSpace.DisallowTabIndent"/>
     </rule>
 
     <!-- Include PHPCompatibility -->
     <rule ref="PHPCompatibilityWP"/>
 
     <!-- Check for PHP cross-version compatibility -->
-    <config name="testVersion" value="7.4-"/>
+    <config name="testVersion" value="8.0-"/>
 
     <!-- Set minimum supported WP version -->
-    <config name="minimum_supported_wp_version" value="5.6"/>
+    <config name="minimum_supported_wp_version" value="6.1"/>
 
     <!-- Set text domain -->
     <config name="text_domain" value="gl-phpunit-testing"/>
+
+    <!-- Set prefixes for checking naming conventions -->
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="GL_Testing"/>
+                <element value="gl_testing"/>
+                <element value="GL\\Testing"/>
+            </property>
+        </properties>
+    </rule>
 
     <!-- Custom Rules -->
     <rule ref="Squiz.Commenting.FunctionComment" />
@@ -51,11 +73,28 @@
     <rule ref="Squiz.Commenting.ClassComment" />
     <rule ref="Generic.Commenting.DocComment" />
 
+    <!-- Allow WordPress-style class names with underscores (like WP_Mock_Test_Case) -->
+    <rule ref="Squiz.Classes.ValidClassName.NotCamelCaps">
+        <exclude-pattern>*/WP_*.php</exclude-pattern>
+    </rule>
+
     <!-- Enforce type hints -->
     <rule ref="SlevomatCodingStandard.TypeHints.ParameterTypeHint">
         <exclude name="SlevomatCodingStandard.TypeHints.ParameterTypeHint.MissingTraversableTypeHintSpecification"/>
     </rule>
     <rule ref="SlevomatCodingStandard.TypeHints.ReturnTypeHint">
         <exclude name="SlevomatCodingStandard.TypeHints.ReturnTypeHint.MissingTraversableTypeHintSpecification"/>
+        <!-- Disable warning about redundant @return annotations when return type is already declared -->
+        <exclude name="SlevomatCodingStandard.TypeHints.ReturnTypeHint.UselessAnnotation"/>
     </rule>
+
+    <!-- Disable comment formatting rules that are too strict -->
+    <rule ref="Squiz.Commenting.InlineComment.InvalidEndChar">
+        <severity>0</severity>
+    </rule>
+    <rule ref="Squiz.Commenting.FunctionComment.ParamCommentFullStop">
+        <severity>0</severity>
+    </rule>
+
+
 </ruleset>

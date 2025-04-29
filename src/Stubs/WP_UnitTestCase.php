@@ -17,83 +17,83 @@ namespace GL\Testing\Framework\Stubs;
 use PHPUnit\Framework\TestCase;
 
 if (!class_exists('WP_UnitTestCase')) {
-    /**
-     * WordPress Unit Test Case stub class
-     */
-    class WP_UnitTestCase extends TestCase {
-        /**
-         * Factory for creating WordPress data like posts, users, etc.
-         *
-         * @var object
-         */
-        public $factory;
+	/**
+	 * WordPress Unit Test Case stub class
+	 */
+	class WP_UnitTestCase extends TestCase {
+	    /**
+	     * Factory for creating WordPress data like posts, users, etc.
+	     *
+	     * @var object
+	     */
+	    public $factory;
 
-        /**
-         * Set up the test environment
-         *
-         * @return void
-         */
-        protected function setUp(): void {
-            parent::setUp();
-            $this->factory = new \stdClass();
-        }
+	    /**
+	     * Set up the test environment
+	     *
+	     * @return void
+	     */
+	    protected function setUp(): void {
+	        parent::setUp();
+	        $this->factory = new \stdClass();
+	    }
 
-        /**
-         * Clean up after each test
-         *
-         * @return void
-         */
-        protected function tearDown(): void {
-            parent::tearDown();
-        }
+	    /**
+	     * Clean up after each test
+	     *
+	     * @return void
+	     */
+	    protected function tearDown(): void {
+	        parent::tearDown();
+	    }
 
-        /**
-         * Stub for assertQueryTrue method
-         *
-         * @return void
-         */
-        public function assertQueryTrue(): void {
-            // Stub implementation
-        }
+	    /**
+	     * Stub for assertQueryTrue method
+	     *
+	     * @return void
+	     */
+	    public function assertQueryTrue(): void {
+	        // Stub implementation
+	    }
 
-        /**
-         * Stub for assertWPError method
-         *
-         * @param mixed $actual The value to check
-         * @return void
-         */
-        public function assertWPError($actual): void {
-            // Stub implementation
-        }
+	    /**
+	     * Stub for assertWPError method
+	     *
+	     * @param mixed $actual The value to check
+	     * @return void
+	     */
+	    public function assertWPError( mixed $actual ): void {
+	        // Stub implementation
+	    }
 
-        /**
-         * Stub for assertNotWPError method
-         *
-         * @param mixed $actual The value to check
-         * @return void
-         */
-        public function assertNotWPError($actual): void {
-            // Stub implementation
-        }
+	    /**
+	     * Stub for assertNotWPError method
+	     *
+	     * @param mixed $actual The value to check
+	     * @return void
+	     */
+	    public function assertNotWPError( mixed $actual ): void {
+	        // Stub implementation
+	    }
 
-        /**
-         * Stub for assertIXRError method
-         *
-         * @param mixed $actual The value to check
-         * @return void
-         */
-        public function assertIXRError($actual): void {
-            // Stub implementation
-        }
+	    /**
+	     * Stub for assertIXRError method
+	     *
+	     * @param mixed $actual The value to check
+	     * @return void
+	     */
+	    public function assertIXRError( mixed $actual ): void {
+	        // Stub implementation
+	    }
 
-        /**
-         * Stub for assertNotIXRError method
-         *
-         * @param mixed $actual The value to check
-         * @return void
-         */
-        public function assertNotIXRError($actual): void {
-            // Stub implementation
-        }
-    }
+	    /**
+	     * Stub for assertNotIXRError method
+	     *
+	     * @param mixed $actual The value to check
+	     * @return void
+	     */
+	    public function assertNotIXRError( mixed $actual ): void {
+	        // Stub implementation
+	    }
+	}
 }

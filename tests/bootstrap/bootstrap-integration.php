@@ -19,11 +19,11 @@ namespace GL\Testing\Framework\Bootstrap;
 
 // Define WordPress test environment constants if not already defined
 if (!defined('WP_TESTS_MULTISITE')) {
-    define('WP_TESTS_MULTISITE', false);
+	define('WP_TESTS_MULTISITE', false);
 }
 
 if (!defined('WP_TESTS_FORCE_KNOWN_BUGS')) {
-    define('WP_TESTS_FORCE_KNOWN_BUGS', false);
+	define('WP_TESTS_FORCE_KNOWN_BUGS', false);
 }
 
 // Attempt to locate WordPress test library
@@ -33,33 +33,33 @@ $wp_tests_dir = getenv('WP_TESTS_DIR');
 
 // Try to find the WordPress test library in common locations
 if (!$wp_tests_dir) {
-    $possible_locations = [
-        // As installed by composer wordpress-dev package
-        dirname(__DIR__, 4) . '/vendor/wordpress/wordpress-develop/tests/phpunit',
-        // As installed via wp-cli scaffold
-        dirname(__DIR__, 4) . '/wp-content/plugins/wordpress-develop/tests/phpunit',
-        // Standard locations
-        '/tmp/wordpress-tests-lib',
-        '/var/www/wordpress-develop/tests/phpunit',
-        '/wordpress-develop/tests/phpunit',
-        // Allow custom path via environment variable
-        getenv('WP_DEVELOP_DIR') . '/tests/phpunit',
-    ];
+	$possible_locations = [
+	    // As installed by composer wordpress-dev package
+	    dirname(__DIR__, 4) . '/vendor/wordpress/wordpress-develop/tests/phpunit',
+	    // As installed via wp-cli scaffold
+	    dirname(__DIR__, 4) . '/wp-content/plugins/wordpress-develop/tests/phpunit',
+	    // Standard locations
+	    '/tmp/wordpress-tests-lib',
+	    '/var/www/wordpress-develop/tests/phpunit',
+	    '/wordpress-develop/tests/phpunit',
+	    // Allow custom path via environment variable
+	    getenv('WP_DEVELOP_DIR') . '/tests/phpunit',
+	];
 
-    foreach ($possible_locations as $location) {
-        if (is_dir($location)) {
-            $wp_tests_dir = $location;
-            break;
-        }
-    }
+	foreach ($possible_locations as $location) {
+	    if (is_dir($location)) {
+	        $wp_tests_dir = $location;
+	        break;
+	    }
+	}
 }
 
 // Bail if we couldn't find the tests directory
 if (!$wp_tests_dir || !is_dir($wp_tests_dir)) {
-    echo "ERROR: WordPress test library not found.\n";
-    echo "Please set the WP_TESTS_DIR environment variable to the path of the WordPress test library.\n";
-    echo "See: https://developer.wordpress.org/cli/commands/scaffold/plugin-tests/\n";
-    exit(1);
+	echo "ERROR: WordPress test library not found.\n";
+	echo "Please set the WP_TESTS_DIR environment variable to the path of the WordPress test library.\n";
+	echo "See: https://developer.wordpress.org/cli/commands/scaffold/plugin-tests/\n";
+	exit(1);
 }
 
 // Load the WordPress test bootstrap file
@@ -72,7 +72,7 @@ echo "Setting up Mockery for integration tests\n";
 
 // Register shutdown function to clean up Mockery
 register_shutdown_function(function() {
-    \Mockery::close();
+	\Mockery::close();
 });
 
 echo "Integration test bootstrap complete\n";

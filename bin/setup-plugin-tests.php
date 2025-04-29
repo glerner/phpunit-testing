@@ -21,7 +21,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
 // Define script constants
-define('SCRIPT_DIR', dirname(__FILE__));
+define('SCRIPT_DIR', __DIR__);
 define('PROJECT_DIR', dirname(SCRIPT_DIR));
 
 // Define color constants for terminal output
@@ -36,11 +36,11 @@ define('COLOR_WHITE', "\033[37m");
 define('COLOR_BOLD', "\033[1m");
 
 // Global exception handler to catch and display any uncaught exceptions
-set_exception_handler(function(\Throwable $e) {
-    echo "\n" . COLOR_RED . "UNCAUGHT EXCEPTION: " . get_class($e) . COLOR_RESET . "\n";
-    echo COLOR_RED . "Message: " . $e->getMessage() . COLOR_RESET . "\n";
-    echo COLOR_RED . "File: " . $e->getFile() . " (Line " . $e->getLine() . ")" . COLOR_RESET . "\n";
-    echo COLOR_RED . "Stack trace:" . COLOR_RESET . "\n";
+set_exception_handler(function ( \Throwable $e ): void {
+    echo "\n" . COLOR_RED . 'UNCAUGHT EXCEPTION: ' . get_class($e) . COLOR_RESET . "\n";
+    echo COLOR_RED . 'Message: ' . $e->getMessage() . COLOR_RESET . "\n";
+    echo COLOR_RED . 'File: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')' . COLOR_RESET . "\n";
+    echo COLOR_RED . 'Stack trace:' . COLOR_RESET . "\n";
     echo $e->getTraceAsString() . "\n";
     exit(1);
 });
@@ -51,11 +51,11 @@ set_exception_handler(function(\Throwable $e) {
  * @return array Loaded settings
  */
 function load_settings_file(): array {
-    $settings = [];
+    $settings = array();
     $env_file = PROJECT_DIR . '/.env.testing';
 
     if (file_exists($env_file)) {
-        echo "Loading environment variables from .env.testing at: " . COLOR_CYAN . $env_file . COLOR_RESET . "\n";
+        echo 'Loading environment variables from .env.testing at: ' . COLOR_CYAN . $env_file . COLOR_RESET . "\n";
         $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($lines as $line) {
             // Skip comments
@@ -74,7 +74,7 @@ function load_settings_file(): array {
                     $value = $matches[2];
                 }
 
-                $settings[$key] = $value;
+                $settings[ $key ] = $value;
             }
         }
     }
@@ -86,10 +86,10 @@ function load_settings_file(): array {
  * Get a configuration value from environment variables, .env file, or default
  *
  * @param string $name Setting name
- * @param mixed $default Default value if not found
+ * @param mixed  $default Default value if not found
  * @return mixed Setting value
  */
-function get_setting(string $name, $default = null) {
+function get_setting( string $name, mixed $default = null ): mixed {
     // Check environment variables first (highest priority)
     $env_value = getenv($name);
     if ($env_value !== false) {
@@ -98,8 +98,8 @@ function get_setting(string $name, $default = null) {
 
     // Check our loaded settings (already loaded from .env.testing)
     global $loaded_settings;
-    if (isset($loaded_settings[$name])) {
-        return $loaded_settings[$name];
+    if (isset($loaded_settings[ $name ])) {
+        return $loaded_settings[ $name ];
     }
 
     // Return default if not found
@@ -120,24 +120,24 @@ function get_setting(string $name, $default = null) {
  * Note: The table_prefix is only read by WordPress from wp-config.php and cannot be overridden.
  *
  * @param string $wp_config_path Path to WordPress configuration file
- * @param array $lando_info Lando environment configuration, obtained by executing 'lando info' command
+ * @param array  $lando_info Lando environment configuration, obtained by executing 'lando info' command
  * @param string $config_file_name Name of the configuration file (default: '.env.testing')
  * @return array Database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
  * @throws Exception If wp-config.php doesn't exist or if any required database settings are missing
  */
 function get_database_settings(
     string $wp_config_path,
-    array $lando_info = [],
+    array $lando_info = array(),
     string $config_file_name = '.env.testing'
 ): array {
     // Initialize with not set values
-    $db_settings = [
+    $db_settings = array(
         'db_host' => '[not set]',
         'db_user' => '[not set]',
         'db_pass' => '[not set]',
         'db_name' => '[not set]',
-        'table_prefix' => 'wp_' // Default WordPress table prefix
-    ];
+        'table_prefix' => 'wp_', // Default WordPress table prefix
+    );
 
     // 1. Load from wp-config.php (lowest priority)
     if (file_exists($wp_config_path)) {
@@ -181,10 +181,18 @@ function get_database_settings(
     $env_file_db_pass = get_setting('WP_TESTS_DB_PASSWORD', null);
     $env_file_db_name = get_setting('WP_TESTS_DB_NAME', null);
 
-    if ($env_file_db_host) $db_settings['db_host'] = $env_file_db_host;
-    if ($env_file_db_user) $db_settings['db_user'] = $env_file_db_user;
-    if ($env_file_db_pass !== null) $db_settings['db_pass'] = $env_file_db_pass; // Password can be empty
-    if ($env_file_db_name) $db_settings['db_name'] = $env_file_db_name;
+    if ($env_file_db_host) {
+		$db_settings['db_host'] = $env_file_db_host;
+    }
+    if ($env_file_db_user) {
+		$db_settings['db_user'] = $env_file_db_user;
+    }
+    if ($env_file_db_pass !== null) {
+		$db_settings['db_pass'] = $env_file_db_pass; // Password can be empty
+    }
+    if ($env_file_db_name) {
+		$db_settings['db_name'] = $env_file_db_name;
+    }
     // Note: table_prefix is only read from wp-config.php and not from environment variables or config files
 
     // 3. Load from environment variables
@@ -193,10 +201,18 @@ function get_database_settings(
     $env_var_db_pass = getenv('WP_TESTS_DB_PASSWORD');
     $env_var_db_name = getenv('WP_TESTS_DB_NAME');
 
-    if ($env_var_db_host !== false && $env_var_db_host) $db_settings['db_host'] = $env_var_db_host;
-    if ($env_var_db_user !== false && $env_var_db_user) $db_settings['db_user'] = $env_var_db_user;
-    if ($env_var_db_pass !== false) $db_settings['db_pass'] = $env_var_db_pass; // Password can be empty
-    if ($env_var_db_name !== false && $env_var_db_name) $db_settings['db_name'] = $env_var_db_name;
+    if ($env_var_db_host !== false && $env_var_db_host) {
+		$db_settings['db_host'] = $env_var_db_host;
+    }
+    if ($env_var_db_user !== false && $env_var_db_user) {
+		$db_settings['db_user'] = $env_var_db_user;
+    }
+    if ($env_var_db_pass !== false) {
+		$db_settings['db_pass'] = $env_var_db_pass; // Password can be empty
+    }
+    if ($env_var_db_name !== false && $env_var_db_name) {
+		$db_settings['db_name'] = $env_var_db_name;
+    }
     // Note: table_prefix is only read from wp-config.php and not from environment variables
 
     // 4. Load from Lando configuration (highest priority)
@@ -233,13 +249,13 @@ function get_database_settings(
             echo "Found Lando database service: {$db_settings['db_host']}\n";
             // Note: table_prefix is only read from wp-config.php and not from Lando configuration
         } else {
-            echo COLOR_YELLOW . "Warning: No MySQL service found in Lando configuration." . COLOR_RESET . "\n";
+            echo COLOR_YELLOW . 'Warning: No MySQL service found in Lando configuration.' . COLOR_RESET . "\n";
             echo "This indicates a potential issue with your Lando setup.\n";
         }
     }
 
     // Check if we have all required settings
-    $missing_settings = [];
+    $missing_settings = array();
     foreach ($db_settings as $key => $value) {
         if ($value === '[not set]') {
             $missing_settings[] = strtoupper($key);
@@ -256,7 +272,7 @@ function get_database_settings(
     echo "- Host: {$db_settings['db_host']}\n";
     echo "- User: {$db_settings['db_user']}\n";
     echo "- Database: {$db_settings['db_name']}\n";
-    echo "- Password length: " . strlen($db_settings['db_pass']) . "\n";
+    echo '- Password length: ' . strlen($db_settings['db_pass']) . "\n";
 
     return $db_settings;
 }
@@ -271,7 +287,7 @@ $loaded_settings = load_settings_file();
  * @param string $command The command to execute via SSH
  * @return string The properly formatted command
  */
-function format_ssh_command(string $ssh_command, string $command): string {
+function format_ssh_command( string $ssh_command, string $command ): string {
     // Debug: Show the input command
     echo "\nDebug: format_ssh_command input:\n";
     echo "SSH command: $ssh_command\n";
@@ -297,15 +313,15 @@ function format_ssh_command(string $ssh_command, string $command): string {
 /**
  * Format MySQL command with proper parameters and SQL command
  *
- * @param string $host Database host
- * @param string $user Database user
- * @param string $pass Database password
- * @param string $sql SQL command to execute
+ * @param string      $host Database host
+ * @param string      $user Database user
+ * @param string      $pass Database password
+ * @param string      $sql SQL command to execute
  * @param string|null $db Optional database name to use
- * @param string $command_type The type of command ('lando_direct', 'ssh', or 'direct')
+ * @param string      $command_type The type of command ('lando_direct', 'ssh', or 'direct')
  * @return string Formatted MySQL command
  */
-function format_mysql_command(string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'ssh'): string {
+function format_mysql_command( string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'ssh' ): string {
     // Build the connection parameters
     $connection_params = "-h $host -u $user";
 
@@ -329,7 +345,7 @@ function format_mysql_command(string $host, string $user, string $pass, string $
     }
 
     // 3. For multiline SQL (like heredoc), replace newlines with spaces
-    $sql = str_replace("\n", " ", $sql);
+    $sql = str_replace("\n", ' ', $sql);
 
     // 4. Escape quotes in SQL based on command type
     $escaped_sql = $sql;
@@ -360,15 +376,15 @@ function format_mysql_command(string $host, string $user, string $pass, string $
 /**
  * Format and execute a MySQL command using the appropriate method (direct, SSH, or Lando)
  *
- * @param string $ssh_command The SSH command to use (or 'none' for direct)
- * @param string $host Database host
- * @param string $user Database user
- * @param string $pass Database password
- * @param string $sql SQL command to execute
+ * @param string      $ssh_command The SSH command to use (or 'none' for direct)
+ * @param string      $host Database host
+ * @param string      $user Database user
+ * @param string      $pass Database password
+ * @param string      $sql SQL command to execute
  * @param string|null $db Optional database name to use
  * @return string The fully formatted command ready to execute
  */
-function format_mysql_execution(string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null): string {
+function format_mysql_execution( string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null ): string {
     $command_type = 'ssh';
 
     // Determine the command type based on the SSH command
@@ -431,7 +447,7 @@ function check_system_requirements(): bool {
     }
 
     // Check if PHP is available (obviously it is if we're running this script)
-    echo COLOR_GREEN . "✅ System requirements met" . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ System requirements met' . COLOR_RESET . "\n";
     return true;
 }
 
@@ -439,10 +455,10 @@ function check_system_requirements(): bool {
  * Find WordPress root by looking for wp-config.php
  *
  * @param string $current_dir Starting directory
- * @param int $max_depth Maximum directory depth to search
+ * @param int    $max_depth Maximum directory depth to search
  * @return string|null WordPress root path or null if not found
  */
-function find_wordpress_root(string $current_dir, int $max_depth = 5): ?string {
+function find_wordpress_root( string $current_dir, int $max_depth = 5 ): ?string {
     $depth = 0;
 
     while ($depth < $max_depth) {
@@ -463,7 +479,7 @@ function find_wordpress_root(string $current_dir, int $max_depth = 5): ?string {
  * @param string $wp_config_path Path to wp-config.php
  * @return string|null Config value or null if not found
  */
-function get_wp_config_value(string $search_value, string $wp_config_path): ?string {
+function get_wp_config_value( string $search_value, string $wp_config_path ): ?string {
     if (!file_exists($wp_config_path)) {
         return null;
     }
@@ -490,7 +506,7 @@ function parse_lando_info(): ?array {
 
     $lando_data = json_decode($lando_info, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        echo "Warning: Failed to parse LANDO_INFO JSON: " . json_last_error_msg() . "\n";
+        echo 'Warning: Failed to parse LANDO_INFO JSON: ' . json_last_error_msg() . "\n";
         return null;
     }
 
@@ -503,7 +519,7 @@ function parse_lando_info(): ?array {
  * @param string $wp_tests_dir Directory to install tests
  * @return bool True if successful, false otherwise
  */
-function download_wp_tests(string $wp_tests_dir): bool {
+function download_wp_tests( string $wp_tests_dir ): bool {
     echo "Setting up WordPress test suite in: $wp_tests_dir\n";
 
     // Create tests directory if it doesn't exist
@@ -546,7 +562,7 @@ function download_wp_tests(string $wp_tests_dir): bool {
     }
 
     // Create required directories
-    foreach (['includes', 'data', 'tests'] as $dir) {
+    foreach (array( 'includes', 'data', 'tests' ) as $dir) {
         if (!is_dir("$wp_tests_dir/$dir")) {
             mkdir("$wp_tests_dir/$dir", 0755, true);
         }
@@ -566,7 +582,7 @@ function download_wp_tests(string $wp_tests_dir): bool {
         return false;
     }
 
-    echo COLOR_GREEN . "✅ WordPress test suite downloaded successfully." . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ WordPress test suite downloaded successfully.' . COLOR_RESET . "\n";
     return true;
 }
 
@@ -649,13 +665,13 @@ EOT;
     // Instead of a symlink, copy the file directly
     // This is more reliable, especially in containerized environments
     if (copy("$wp_tests_dir/wp-tests-config.php", "$tests_dir/wp-tests-config.php")) {
-        echo COLOR_GREEN . "✅ Copied wp-tests-config.php to tests directory" . COLOR_RESET . "\n";
+        echo COLOR_GREEN . '✅ Copied wp-tests-config.php to tests directory' . COLOR_RESET . "\n";
     } else {
         echo "Warning: Failed to copy wp-tests-config.php. You may need to copy the file manually.\n";
         // Continue anyway, this is not critical
     }
 
-    echo COLOR_GREEN . "✅ wp-tests-config.php generated successfully." . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ wp-tests-config.php generated successfully.' . COLOR_RESET . "\n";
     return true;
 }
 
@@ -681,7 +697,7 @@ function install_test_suite(
     echo "  Host: $db_host\n";
     echo "  User: $db_user\n";
     echo "  Name: $db_name\n";
-    echo "  Password length: " . strlen($db_pass) . "\n";
+    echo '  Password length: ' . strlen($db_pass) . "\n";
 
     // Check if mysql command is available
     exec('which mysql', $output, $return_var);
@@ -698,11 +714,11 @@ function install_test_suite(
     $ssh_command = get_setting('SSH_COMMAND', 'none');
 
     // Prepare the mysql command based on SSH_COMMAND setting
-    $mysql_cmd = "mysql";
+    $mysql_cmd = 'mysql';
     $use_ssh = false;
 
     // Determine how to execute database commands
-    echo "Database access method from .env.testing: " . COLOR_CYAN . "SSH_COMMAND=" . ($ssh_command ?: 'not set') . COLOR_RESET . "\n";
+    echo 'Database access method from .env.testing: ' . COLOR_CYAN . 'SSH_COMMAND=' . ( $ssh_command ?: 'not set' ) . COLOR_RESET . "\n";
     if ($ssh_command === 'none') {
         echo "Using mysql directly (no SSH needed)\n";
     } elseif ($ssh_command === 'ssh') {
@@ -733,13 +749,13 @@ function install_test_suite(
 
     if ($return_var !== 0) {
         echo "Error: Cannot connect to MySQL server.\n";
-        echo "Output: " . implode("\n", $output) . "\n";
+        echo 'Output: ' . implode("\n", $output) . "\n";
         return false;
     }
 
     echo COLOR_GREEN . "✅ Connected to MySQL on host: $db_host" . COLOR_RESET . "\n";
 
-    echo COLOR_GREEN . "✅ MySQL connection successful" . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ MySQL connection successful' . COLOR_RESET . "\n";
 
     // Try to drop database if exists
     echo "Attempting to drop existing database...\n";
@@ -758,10 +774,10 @@ function install_test_suite(
 
     if ($return_var !== 0) {
         echo "Warning: Failed to drop test database.\n";
-        echo "Output: " . implode("\n", $output) . "\n";
+        echo 'Output: ' . implode("\n", $output) . "\n";
         echo "Continuing anyway, as the database might not exist yet...\n";
     } else {
-        echo COLOR_GREEN . "✅ Existing database dropped (if it existed)" . COLOR_RESET . "\n";
+        echo COLOR_GREEN . '✅ Existing database dropped (if it existed)' . COLOR_RESET . "\n";
     }
 
     // Create database and grant permissions
@@ -791,14 +807,14 @@ DB_SETUP;
 
     if ($return_var !== 0) {
         echo "Error: Failed to create test database.\n";
-        echo "Output: " . implode("\n", $output) . "\n";
+        echo 'Output: ' . implode("\n", $output) . "\n";
         echo "\nDebug: Full SQL command:\n$sql_command\n";
         echo "\nDebug: Try running this command manually to see the error:\n";
         echo "$cmd\n";
         return false;
     }
 
-    echo COLOR_GREEN . "✅ Database created successfully" . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ Database created successfully' . COLOR_RESET . "\n";
 
     // Verify database exists and is accessible
     echo "Verifying database access...\n";
@@ -809,11 +825,11 @@ DB_SETUP;
 
     if ($return_var !== 0) {
         echo "Error: Cannot access test database after creation.\n";
-        echo "Output: " . implode("\n", $output) . "\n";
+        echo 'Output: ' . implode("\n", $output) . "\n";
         return false;
     }
 
-    echo COLOR_GREEN . "✅ Test database created and verified" . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ Test database created and verified' . COLOR_RESET . "\n";
 
     // Install WordPress test framework
     echo "Installing WordPress test framework...\n";
@@ -848,8 +864,8 @@ EOT;
 
     // Check if files exist
     echo "Debug: Checking if files exist:\n";
-    echo "- install.php exists: " . (file_exists("$wp_tests_dir/includes/install.php") ? 'Yes' : 'No') . "\n";
-    echo "- wp-tests-config.php exists: " . (file_exists("$wp_tests_dir/wp-tests-config.php") ? 'Yes' : 'No') . "\n";
+    echo '- install.php exists: ' . ( file_exists("$wp_tests_dir/includes/install.php") ? 'Yes' : 'No' ) . "\n";
+    echo '- wp-tests-config.php exists: ' . ( file_exists("$wp_tests_dir/wp-tests-config.php") ? 'Yes' : 'No' ) . "\n";
 
     // Check database configuration in wp-tests-config.php
     if (file_exists("$wp_tests_dir/wp-tests-config.php")) {
@@ -861,9 +877,9 @@ EOT;
         preg_match("/define\s*\(\s*['\"]DB_USER['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)/", $config_content, $db_user_match);
         preg_match("/define\s*\(\s*['\"]DB_HOST['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)/", $config_content, $db_host_match);
 
-        echo "- DB_NAME: " . ($db_name_match[1] ?? 'Not found') . "\n";
-        echo "- DB_USER: " . ($db_user_match[1] ?? 'Not found') . "\n";
-        echo "- DB_HOST: " . ($db_host_match[1] ?? 'Not found') . "\n";
+        echo '- DB_NAME: ' . ( $db_name_match[1] ?? 'Not found' ) . "\n";
+        echo '- DB_USER: ' . ( $db_user_match[1] ?? 'Not found' ) . "\n";
+        echo '- DB_HOST: ' . ( $db_host_match[1] ?? 'Not found' ) . "\n";
 
         // Check if the database settings match what we expect
         echo "Debug: Comparing with our database settings:\n";
@@ -873,13 +889,13 @@ EOT;
     }
 
     // Determine which PHP to use based on environment
-    $php_command = "php";
+    $php_command = 'php';
     $install_path = "$wp_tests_dir/includes/install.php";
     $config_path = "$wp_tests_dir/wp-tests-config.php";
 
     if ($targeting_lando) {
         echo "Debug: Using Lando PHP for installation...\n";
-        $php_command = "lando php";
+        $php_command = 'lando php';
         // When using Lando for WordPress, we use the database in Lando, so we need to use "lando php" and container paths
         $wp_root = get_setting('WP_ROOT', '/app');
         $install_path = "$wp_root/wp-content/plugins/wordpress-develop/tests/phpunit/includes/install.php";
@@ -889,7 +905,7 @@ EOT;
     }
 
     // Capture output for debugging
-    $output = [];
+    $output = array();
     $command = "$php_command $install_path $config_path 2>&1";
     echo "Debug: PHP command: $php_command $install_path $config_path\n";
     echo "Debug: Executing: $command\n";
@@ -930,7 +946,7 @@ EOT;
         return false;
     }
 
-    echo COLOR_GREEN . "✅ WordPress test framework installed successfully." . COLOR_RESET . "\n";
+    echo COLOR_GREEN . '✅ WordPress test framework installed successfully.' . COLOR_RESET . "\n";
     return true;
 }
 
@@ -973,17 +989,17 @@ DROP_DB;
 
     if ($return_var !== 0) {
         echo "Error: Failed to drop test database.\n";
-        echo "Output: " . implode("\n", $output) . "\n";
+        echo 'Output: ' . implode("\n", $output) . "\n";
         // Continue anyway to remove files
     } else {
-        echo COLOR_GREEN . "✅ Database dropped successfully" . COLOR_RESET . "\n";
+        echo COLOR_GREEN . '✅ Database dropped successfully' . COLOR_RESET . "\n";
     }
 
     // Remove test files if they exist
     if (file_exists($wp_tests_dir)) {
         echo "Removing test files from $wp_tests_dir...\n";
         system("rm -rf $wp_tests_dir");
-        echo COLOR_GREEN . "✅ Test files removed successfully" . COLOR_RESET . "\n";
+        echo COLOR_GREEN . '✅ Test files removed successfully' . COLOR_RESET . "\n";
     } else {
         echo "No test files found at $wp_tests_dir\n";
     }
@@ -1064,7 +1080,7 @@ if (empty($wp_root)) {
         $wp_root = $local_root;
         echo "Found WordPress root at: $wp_root\n";
     } else {
-        echo COLOR_RED . "ERROR: Could not find WordPress root directory (wp-config.php not found)." . COLOR_RESET . "\n";
+        echo COLOR_RED . 'ERROR: Could not find WordPress root directory (wp-config.php not found).' . COLOR_RESET . "\n";
         echo "Please specify FILESYSTEM_WP_ROOT in your .env.testing file.\n";
         exit(1);
     }
@@ -1087,7 +1103,7 @@ function get_lando_info(): array {
     $lando_exists = shell_exec('which lando 2>/dev/null');
     if (empty($lando_exists)) {
         echo "Lando command not found. Skipping Lando configuration.\n";
-        return [];
+        return array();
     }
 
     // Run lando info command
@@ -1095,14 +1111,14 @@ function get_lando_info(): array {
     $lando_info_json = shell_exec('lando info --format=json 2>/dev/null');
     if (empty($lando_info_json)) {
         echo "No Lando configuration found. Is Lando running? (`lando start` command, if should be running)\n";
-        return [];
+        return array();
     }
 
     // Parse JSON output
     $lando_info = json_decode($lando_info_json, true);
     if (json_last_error() !== JSON_ERROR_NONE || empty($lando_info)) {
         echo "Error parsing Lando configuration. Skipping Lando settings.\n";
-        return [];
+        return array();
     }
 
     echo "Found Lando configuration.\n";
@@ -1118,7 +1134,7 @@ if (!empty($lando_info_array)) {
 /**
  * Configure PHPUnit database settings based on WordPress database settings
  *
- * @param array $wp_db_settings WordPress database settings from get_database_settings()
+ * @param array       $wp_db_settings WordPress database settings from get_database_settings()
  * @param string|null $test_db_name Complete database name for tests (default: null, will use WP db name + '_test')
  * @param string|null $test_table_prefix Table prefix for tests (default: null, will use WordPress table prefix)
  * @return array PHPUnit database settings
@@ -1177,7 +1193,7 @@ $db_name = $phpunit_db_settings['db_name'];
 $validation_path = $filesystem_wp_root;
 
 if (!file_exists("$validation_path/wp-includes") || !file_exists("$validation_path/wp-admin") || !file_exists("$validation_path/wp-content")) {
-    echo COLOR_RED . "ERROR: The detected WordPress root does not appear to be a valid WordPress installation." . COLOR_RESET . "\n";
+    echo COLOR_RED . 'ERROR: The detected WordPress root does not appear to be a valid WordPress installation.' . COLOR_RESET . "\n";
     echo "Could not find one or more of the following directories:\n";
     echo "  - $validation_path/wp-includes\n";
     echo "  - $validation_path/wp-admin\n";
@@ -1189,7 +1205,7 @@ if (!file_exists("$validation_path/wp-includes") || !file_exists("$validation_pa
     exit(1);
 }
 
-echo COLOR_GREEN . "✅ Valid WordPress installation detected" . COLOR_RESET . "\n";
+echo COLOR_GREEN . '✅ Valid WordPress installation detected' . COLOR_RESET . "\n";
 echo "  - Container path: $wp_root\n";
 echo "  - Filesystem path: $filesystem_wp_root\n";
 
@@ -1201,10 +1217,10 @@ echo "Using WordPress test directory: $wp_tests_dir\n";
 // If --remove-all flag is set, remove test suite and exit
 if ($remove_all) {
     if (remove_test_suite($wp_tests_dir, $db_name, $db_host, $ssh_command)) {
-        echo "\n" . COLOR_GREEN . "✅ WordPress test suite successfully removed!" . COLOR_RESET . "\n";
+        echo "\n" . COLOR_GREEN . '✅ WordPress test suite successfully removed!' . COLOR_RESET . "\n";
         exit(0);
     } else {
-        echo "\n" . COLOR_RED . "❌ Failed to completely remove WordPress test suite." . COLOR_RESET . "\n";
+        echo "\n" . COLOR_RED . '❌ Failed to completely remove WordPress test suite.' . COLOR_RESET . "\n";
         exit(1);
     }
 }
@@ -1221,7 +1237,7 @@ if (!generate_wp_tests_config($wp_tests_dir, $wp_root, $db_name, $db_user, $db_p
 
 // Create build directories for test coverage reports
 echo "Creating build directories for test coverage in $plugin_dir\n";
-$build_dirs = ["$plugin_dir/build/logs", "$plugin_dir/build/coverage"];
+$build_dirs = array( "$plugin_dir/build/logs", "$plugin_dir/build/coverage" );
 foreach ($build_dirs as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0777, true);

@@ -74,7 +74,7 @@ if (!is_dir($framework_dest)) {
 }
 
 // Build rsync command with exclusions
-$rsync_exclude = [
+$rsync_exclude = array(
     '.git/',
     '.gitignore',
     '.env',
@@ -84,7 +84,7 @@ $rsync_exclude = [
     '.lando/',
     '.lando.yml',
     '.lando.local.yml',
-];
+);
 
 $exclude_params = '';
 foreach ($rsync_exclude as $exclude) {

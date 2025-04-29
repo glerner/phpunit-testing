@@ -747,22 +747,58 @@ We welcome contributions to improve this testing framework and documentation. Fo
 
 This project follows PSR-12 coding standards and WordPress coding standards where appropriate. When contributing code, please ensure your contributions adhere to these standards.
 
-#### Fixing Coding Standards Issues
+#### Code Quality Tools
 
-We use PHP_CodeSniffer to enforce coding standards. You can check and fix coding standards issues with:
+We use several tools to maintain code quality and enforce coding standards.
 
-```bash
-# Check coding standards
-composer run-script phpcs
+Before running these tools, it's recommended to commit your current changes to git. This allows you to easily see the changes made by the automated tools and revert them if necessary.
 
-# Fix coding standards issues automatically where possible
-composer run-script phpcbf
-```
+Note: `composer run-script <command>` is more explicit about what's happening, and `composer <command>` also works. The shorthand syntax (composer phpcs) works for any script defined in your composer.json file.
 
-> **Note:** Using Composer's phpcbf command works more reliably than trying to install and configure Visual Studio Code extensions for PHP code formatting. The command-line approach ensures consistent formatting across all development environments.
+- **PHP Code Beautifier and Fixer (PHPCBF)**: Automatically fixes many of the issues detected by PHPCS. It can correct formatting, spacing, and other style issues.
+  - For practical formatting (avoiding minor issues): `./bin/phpcbf.sh`
+  - For specific files: `./bin/phpcbf.sh path/to/file.php`
+  - direct command: `composer run-script phpcbf`
+
+- **bin/phpcbf.sh**: A practical wrapper script that runs PHPCBF with sensible exclusions, focusing on functional issues rather than minor formatting concerns.
+  - Run with: `./bin/phpcbf.sh`
+  - For specific files: `./bin/phpcbf.sh path/to/file.php`
+  - Automatically converts spaces to tabs first
+  - Excludes purely cosmetic rules that don't affect functionality
+
+- **PHP_CodeSniffer (PHPCS)**: Detects violations of coding standards in your PHP code. It helps maintain consistent code style across the project.
+  - Run with: `composer run-script phpcs`
+  - See detailed errors: `composer run-script phpcs -- -s` (shows sniff codes)
+  - Summary report: `composer run-script phpcs -- --report=summary`
+  - Check specific file: `composer run-script phpcs -- path/to/file.php`
+
+For detailed information about PHPCS and PHPCBF, including troubleshooting tips and configuration details, see [PHPCS-PHPCBF-Guide.md](../tools/PHPCS-PHPCBF-Guide.md).
+
+- **PHPStan**: Performs static analysis of your code to find bugs and errors without actually running the code. It can detect type-related issues, undefined methods, unused code, and other potential problems.
+  - Configured with WordPress-specific rules via szepeviktor/phpstan-wordpress
+  - Run with: `composer run-script analyze`
+
+>
+> **Troubleshooting:** If you encounter errors with `trim(): Passing null to parameter #1 ($string)` when running PHPCBF with PHP 8.1+, this is due to a compatibility issue in older versions of the WordPress Coding Standards package. The solution is to upgrade to version 3.1.0 or later:
+> ```bash
+> composer require --dev wp-coding-standards/wpcs:^3.1 --update-with-dependencies
+> ```
+>
+> Also, make sure to properly configure your project's prefixes in the `phpcs.xml.dist` file:
+> ```xml
+> <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+>     <properties>
+>         <property name="prefixes" type="array">
+>             <element value="YourPrefix"/>
+>             <element value="your_prefix"/>
+>             <element value="Your\\Namespace"/>
+>         </property>
+>     </properties>
+> </rule>
+> ```
 
 Common issues to watch for:
-- Indentation (4 spaces, not tabs)
+- Indentation (tabs, not spaces) as per WordPress Coding Standards
 - Line length (generally 100 characters max)
 - Proper spacing around operators
 - Proper docblock formatting
@@ -776,6 +812,54 @@ Before submitting a pull request, please ensure:
 2. Your code follows the project's coding standards
 3. You've added tests for any new functionality
 4. Documentation is updated if necessary
+
+## Troubleshooting
+
+### Code Quality Tools
+
+#### PHPCS and PHPCBF Issues
+
+**Iterative Process**: PHPCBF and PHPCS often require multiple runs. After running PHPCBF, PHPCS might still report fixable issues. Run PHPCBF again until no more automatic fixes are possible.
+
+**Persistent Issues**: If PHPCBF reports fixing the same number of errors across multiple runs while PHPCS still reports thousands of fixable issues, try these approaches:
+
+1. Focus on one file at a time: `composer run-script phpcbf -- path/to/specific/file.php`
+2. Temporarily exclude problematic rules in phpcs.xml.dist
+3. Manually fix critical issues first
+
+**Conflicting Indentation Standards**: If you see contradictory errors like both `Tabs must be used to indent lines` and `Spaces must be used to indent lines` in the same file, you have conflicting coding standards enabled. This happens because:
+
+1. **WordPress Coding Standards** requires tabs for indentation
+2. **PSR-12** requires spaces for indentation
+
+When both standards are enabled in phpcs.xml.dist, they conflict with each other. To resolve this:
+
+1. Decide which standard to prioritize (for WordPress plugins, typically WordPress Coding Standards)
+2. Modify your phpcs.xml.dist to exclude the conflicting rule from one standard:
+   ```xml
+   <rule ref="PSR12">
+       <!-- Exclude PSR-12 indentation rule to avoid conflict with WordPress -->
+       <exclude name="Generic.WhiteSpace.DisallowTabIndent"/>
+   </rule>
+   ```
+
+**Converting Spaces to Tabs**: To quickly convert leading spaces to tabs in your PHP files (to comply with WordPress Coding Standards), use the provided composer script:
+
+```bash
+composer run-script spaces_to_tabs
+```
+
+This script finds all PHP files in the `src`, `tests`, and `templates` directories and converts any leading 4-space indentation to tabs. This is particularly useful when working with code that was originally formatted according to PSR-12 standards (which uses spaces) and needs to be converted to WordPress Coding Standards (which uses tabs).
+
+3. Configure your editor to use tabs for PHP files. For Windsurf and Visual Studio Code:
+   - Ensure "Editor: Insert Spaces" is unchecked in settings
+   - "Editor: Detect Indentation" can be checked to match existing files
+
+**WordPress Coding Standards PHP 8.1+ Compatibility**: If you encounter errors with `trim(): Passing null to parameter #1 ($string)` when running PHPCBF with PHP 8.1+, update to WordPress Coding Standards 3.1.0 or later:
+
+```bash
+composer require --dev wp-coding-standards/wpcs:^3.1 --update-with-dependencies
+```
 
 ---
 

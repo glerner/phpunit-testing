@@ -23,11 +23,11 @@ ini_set('display_errors', '1');
 
 // Define WordPress constants
 if (!defined('ABSPATH')) {
-    define('ABSPATH', sys_get_temp_dir() . '/wordpress/');
+	define('ABSPATH', sys_get_temp_dir() . '/wordpress/');
 }
 
 if (!defined('WP_DEBUG')) {
-    define('WP_DEBUG', true);
+	define('WP_DEBUG', true);
 }
 
 // Common WordPress constants
@@ -41,12 +41,12 @@ echo "Initializing WP_Mock\n";
 
 // Register shutdown function to verify expectations
 register_shutdown_function(function() {
-    try {
-        \WP_Mock::tearDown();
-    } catch (\Exception $e) {
-        echo "WP_Mock expectations failed: " . $e->getMessage() . "\n";
-        exit(1);
-    }
+	try {
+	    \WP_Mock::tearDown();
+	} catch (\Exception $e) {
+	    echo "WP_Mock expectations failed: " . $e->getMessage() . "\n";
+	    exit(1);
+	}
 });
 
 echo "WP_Mock bootstrap complete\n";

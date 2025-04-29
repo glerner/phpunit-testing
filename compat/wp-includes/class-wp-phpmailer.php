@@ -17,7 +17,7 @@ require_once ABSPATH . 'wp-includes/PHPMailer/Exception.php';
 if (!class_exists('WP_PHPMailer')) {
     /**
      * WordPress PHPMailer class for handling emails.
-     * 
+     *
      * This is a compatibility wrapper for PHPMailer\PHPMailer\PHPMailer
      * to support PHPUnit tests that expect the older class structure.
      */
@@ -25,10 +25,10 @@ if (!class_exists('WP_PHPMailer')) {
         /**
          * Constructor
          */
-        public function __construct($exceptions = null) {
+        public function __construct( $exceptions = null ) {
             // Call parent constructor with exceptions enabled
             parent::__construct($exceptions !== null ? $exceptions : true);
-            
+
             // Set default WordPress mailer settings
             $this->Encoding = 'base64';
             $this->CharSet  = 'UTF-8';

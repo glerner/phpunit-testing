@@ -21,24 +21,20 @@ use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
  * Base Test Case class that provides Mockery integration
  */
 class Unit_Test_Case extends PHPUnit_TestCase {
-    use MockeryPHPUnitIntegration;
+	use MockeryPHPUnitIntegration;
 
-    /**
-     * Set up the test environment
-     *
-     * @return void
-     */
-    protected function setUp(): void {
-        parent::setUp();
-    }
+	/**
+	 * Set up the test environment
+	 */
+	protected function setUp(): void {
+		parent::setUp();
+	}
 
-    /**
-     * Clean up the test environment
-     *
-     * @return void
-     */
-    protected function tearDown(): void {
-        \Mockery::close();
-        parent::tearDown();
-    }
+	/**
+	 * Clean up the test environment
+	 */
+	protected function tearDown(): void {
+		\Mockery::close();
+		parent::tearDown();
+	}
 }

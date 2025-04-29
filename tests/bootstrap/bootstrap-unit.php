@@ -25,16 +25,16 @@ echo "Loading unit test dependencies\n";
 
 // Set up Brain\Monkey if available
 if (class_exists('\Brain\Monkey')) {
-    echo "Setting up Brain\\Monkey\n";
-    \Brain\Monkey\setUp();
-    
-    // Register teardown function to clean up Brain\Monkey
-    register_shutdown_function(function() {
-        \Brain\Monkey\tearDown();
-    });
-    
-    echo "For Brain\Monkey usage examples, see:\n";
-    echo "  /docs/guides/phpunit-testing-tutorial.md#using-brain-monkey-for-wordpress-functions\n";
+	echo "Setting up Brain\\Monkey\n";
+	\Brain\Monkey\setUp();
+	
+	// Register teardown function to clean up Brain\Monkey
+	register_shutdown_function(function() {
+	    \Brain\Monkey\tearDown();
+	});
+	
+	echo "For Brain\Monkey usage examples, see:\n";
+	echo "  /docs/guides/phpunit-testing-tutorial.md#using-brain-monkey-for-wordpress-functions\n";
 }
 
 echo "Unit test bootstrap complete\n";
