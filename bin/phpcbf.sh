@@ -2,6 +2,7 @@
 
 # Run PHPCBF with practical exclusions that focus on functional issues
 # rather than minor formatting concerns
+# Alternative to `"phpcbf": "composer run-script spaces_to_tabs && phpcbf --standard=phpcs.xml.dist", ` in composer.json
 
 # Usage:
 #   ./bin/phpcbf.sh [options] [<file>...]

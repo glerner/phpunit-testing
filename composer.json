@@ -46,7 +46,7 @@
         "test:integration": "phpunit -c config/phpunit-integration.xml.dist",
         "test:framework": "phpunit -c config/phpunit-framework-tests.xml.dist",
         "phpcs": "phpcs --standard=phpcs.xml.dist",
-        "phpcbf": "phpcbf --standard=phpcs.xml.dist",
+        "phpcbf": "composer run-script spaces_to_tabs && phpcbf --standard=phpcs.xml.dist",
         "spaces_to_tabs": "find src tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;",
         "analyze": "vendor/bin/phpstan analyse --configuration=phpstan.neon",
         "sync:wp": "php bin/sync-to-wp.php",

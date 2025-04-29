@@ -27,7 +27,7 @@ composer run-script phpcs -- -s --generator=markdown --report-file=docs/analysis
 
 ### PHPCBF (PHP Code Beautifier and Fixer)
 
-PHPCBF automatically fixes many of the issues detected by PHPCS:
+PHPCBF automatically fixes many of the issues detected by PHPCS, so often will run it before PHPCS:
 
 ```bash
 # Basic usage
@@ -43,32 +43,34 @@ composer run-script phpcbf -- -v
 composer run-script phpcbf -- -i
 ```
 
-## Configuration
+## Configuration for Both PHPCS and PHPCBF
 
-The project uses a customized configuration in `phpcs.xml.dist` that:
+Both are actually part of one library, and use the same configuration file.
+
+This project uses a customized configuration file for them, in `phpcs.xml.dist` that:
 
 1. Follows WordPress Coding Standards with some practical exclusions
-2. Includes PSR-12 standards (except for indentation rules that conflict with WordPress)
+2. Includes PSR-12 standards (except for indentation rules that conflict with WordPress standards)
 3. Requires PHP 8.0+ and WordPress 6.1+
 4. Enforces type hints through Slevomat Coding Standard
 
 ### Excluded Rules
 
-The project excludes certain formatting rules that don't affect functionality:
+This project excludes certain formatting rules that don't affect functionality:
 
-- `Squiz.Commenting.InlineComment.InvalidEndChar`: Comments don't need to end with a period
+- `Squiz.Commenting.InlineComment.InvalidEndChar`: Rule says Comments need to end with a period
 - `PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket`: Spacing inside function parentheses
 - `Generic.Formatting.MultipleStatementAlignment`: Exact alignment of multiple assignments
 - `WordPress.Arrays.ArrayIndentation`: Precise array indentation
 - `WordPress.WhiteSpace.OperatorSpacing`: Spacing around operators
 
-These exclusions focus the code quality tools on catching actual bugs rather than minor formatting issues.
+These exclusions focus the code quality tools on catching actual bugs. They exclude minor formatting issues, that WordPress plugins don't need to be concerned about, and would require manually editing a lot of code.
 
 ## Troubleshooting
 
 ### PHPCBF Limitations
 
-- **50-Pass Limit**: PHPCBF has a built-in limit of 50 passes per file. If it can't fix all issues within 50 passes, it will show an ERROR and won't save any changes to that file.
+- **50-Pass Limit**: PHPCBF has a built-in limit of 50 passes per file. If it can't fix all issues within 50 passes, it will show an ERROR and *won't save* any changes to that file.
 
 - **"FAILED TO FIX" Message**: When PHPCBF shows this message, it may have fixed some issues but not all of them. The error code 2 is normal when PHPCBF fixes some issues but can't fix everything.
 
@@ -82,41 +84,148 @@ These exclusions focus the code quality tools on catching actual bugs rather tha
 To see which rules are loaded and which are excluded, use the `-vv` (very verbose) flag with PHPCS:
 
 ```bash
+# path/to/file.php is the file to check
 composer run-script phpcs -- -vv path/to/file.php
 ```
 
-This will show you all registered sniffs, excluded sniffs, and processing details.
+This will show you all registered sniffs, excluded sniffs, and processing details. You can filter this output to see just what you need:
+
+```bash
+# Show only excluded sniffs
+composer run-script phpcs -- -vv path/to/file.php | grep "Excluding"
+
+# Show only registered sniffs
+composer run-script phpcs -- -vv path/to/file.php | grep "Registered sniff"
+```
 
 ### Strategies for Stubborn Files
 
-1. **Run PHPCBF Multiple Times**: Each run may fix different issues.
+1. **Convert Spaces to Tabs First**:
+   ```bash
+   composer run-script spaces_to_tabs
+   ```
+   This direct approach is significantly faster than using PHPCBF for indentation conversion. PHPCBF can fail to edit files with too many indentation issues, as it tries to make multiple passes and can get overwhelmed by the number of changes needed.
 
-2. **Focus on One File at a Time**:
+   "spaces_to_tabs" is much easier to read than the Bash command it runs:
+   ```bash
+   find src tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;
+   ```
+
+2. **Identify and Exclude Problematic Rules** (see detailed section below):
+   ```bash
+   composer run-script phpcbf -- --exclude=Rule.Category.Sniff path/to/file.php
+   ```
+
+3. **Focus on One File at a Time**:
    ```bash
    composer run-script phpcbf -- path/to/specific/file.php
    ```
 
-3. **Convert Spaces to Tabs First**:
+4. **Run PHPCBF Multiple Times**: Each run may fix different issues.
+
+### Identifying Rules to Exclude
+
+When PHPCBF gets stuck in a loop or can't fix certain issues, you may need to identify specific rules to exclude. Here's a systematic approach to identify problematic rules:
+
+1. **Run PHPCS with sniff codes** (the -s option) to see which violations are being reported:
    ```bash
-   composer run-script spaces_to_tabs
+   composer run-script phpcs -- -s path/to/problem/file.php
    ```
-   Then run PHPCBF after spaces are converted to tabs.
+
+2. **Run PHPCBF with verbose output** (the -vv option) to see which rules it's processing and where it's getting stuck:
+   ```bash
+   composer run-script phpcbf -- -vv path/to/problem/file.php > phpcbf-debug.txt
+   ```
+
+3. **Analyze the output** to identify patterns:
+   - Look for rules that appear repeatedly in the output
+   - Pay attention to rules being processed when PHPCBF hits the 50-pass limit
+   - Note any rules that cause conflicts (e.g., spaces vs. tabs indentation)
+
+   **Example output** showing PHPCBF stuck in a loop:
+   ```
+   => Fixing file: 32/33 violations remaining [made 50 passes]... ERROR in 3.33 secs
+   Processing rule "WordPress.WhiteSpace.ControlStructureSpacing"
+   Processing rule "WordPress.Arrays.ArrayDeclarationSpacingSniff.php"
+   Processing rule "PEAR.Functions.FunctionCallSignature"
+   ```
+
+   This output shows PHPCBF hit the 50-pass limit while processing these specific rules. They are good candidates for exclusion.
+
+4. **Understanding Rule Formats**:
+   - **Sniff Code (3-part)**: `Standard.Category.Sniff` - Used with command line `--exclude`
+   - **Message Code (4-part)**: `Standard.Category.Sniff.MessageCode` - Used in XML configuration
+
+   When using `--exclude` on the command line, you can only exclude at the sniff level (3-part).
+
+5. **Test excluding one rule at a time** using the command line:
+   ```bash
+   # First try excluding one rule
+   composer run-script phpcbf -- --exclude=WordPress.WhiteSpace.ControlStructureSpacing bin/setup-plugin-tests.php
+
+   # If still stuck, try excluding multiple rules based on the example output
+   composer run-script phpcbf -- --exclude=WordPress.WhiteSpace.ControlStructureSpacing,PEAR.Functions.FunctionCallSignature,WordPress.Arrays.ArrayDeclaration bin/setup-plugin-tests.php
+   ```
+
+   Note: For `WordPress.Arrays.ArrayDeclarationSpacingSniff.php` seen in the output, we use `WordPress.Arrays.ArrayDeclaration` (the 3-part sniff code).
+
+6. **Build up a list of problematic rules** by testing which exclusions allow PHPCBF to complete successfully
+
+Once you've identified the problematic rules, you can add them to your phpcs.xml.dist file within the appropriate `<rule ref>` block:
+
+```xml
+<rule ref="WordPress">
+    <!-- Exclude WordPress-specific rules that don't apply -->
+    <exclude name="WordPress.Files.FileName"/>
+
+    <!-- Exclude problematic formatting rules identified from our output -->
+    <exclude name="WordPress.WhiteSpace.ControlStructureSpacing"/>
+    <exclude name="WordPress.Arrays.ArrayDeclaration"/>
+    <exclude name="PEAR.Functions.FunctionCallSignature"/>
+</rule>
+```
+In phpcs.xml.dist, you can use either the 3-part format ("Rule.Category.Sniff") or the 4-part format ("Rule.Category.Sniff.MessageCode"). Using the 3-part format excludes the entire sniff and all its messages, while the 4-part format lets you target specific message types within a sniff. Use the most specific exclusion that solves your problem.
+
+Note: The `<exclude>` elements must be inside the specific `<rule ref>` block they apply to. Rules from different standards (WordPress, PSR12, etc.) need to be excluded within their respective rule blocks.
+
+For this project, we identified the following rules as causing issues with PHPCBF and excluded them in our phpcs.xml.dist:
+
+**Spacing and Indentation Rules:**
+- `WordPress.WhiteSpace.OperatorSpacing`
+- `WordPress.WhiteSpace.ControlStructureSpacing`
+- `WordPress.Arrays.ArrayIndentation`
+- `Generic.WhiteSpace.DisallowSpaceIndent` (handled by our spaces_to_tabs script instead)
+- `PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket`
+- `PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket`
+
+**Formatting and Alignment Rules:**
+- `Generic.Formatting.MultipleStatementAlignment`
+- `Squiz.Commenting.InlineComment.InvalidEndChar`
+- `WordPress.PHP.YodaConditions`
+
+These were systematically identified by running PHPCBF with different exclusions until we found the combination that allowed it to complete successfully without getting stuck in formatting loops.
 
 4. **Exclude Problematic Rules on the Command Line**:
    ```bash
-   composer run-script phpcbf -- --exclude=Generic.WhiteSpace,PEAR.Functions path/to/file.php
+   composer run-script phpcbf -- --exclude=Generic.WhiteSpace.DisallowSpaceIndent,PEAR.Functions path/to/file.php
    ```
-   This can help bypass rules that might be causing PHPCBF to get stuck in a loop.
+   This can help bypass rules that might be causing PHPCBF to get stuck in a loop. Note that multiple rules should be separated by commas with no spaces between them.
 
-5. **Identify Specific Issues with PHPCS First**:
+   **Understanding Rule Formats**:
+   - **Sniff Code (3-part)**: `Standard.Category.Sniff` - Used with command line `--exclude`
+   - **Message Code (4-part)**: `Standard.Category.Sniff.MessageCode` - Used in XML configuration
+
+   When using `--exclude` on the command line, you can only exclude at the sniff level (3-part), which excludes all messages from that sniff. In the XML configuration file, you can exclude at the message level (4-part) for more fine-grained control.
+
+5. **Use PHPCS to Identify Specific Issues**:
    ```bash
    composer run-script phpcs -- -s path/to/file.php
    ```
-   Then focus on fixing the most common or problematic issues manually.
+   The `-s` parameter shows the sniff codes for each violation, making it easier to identify which rules to exclude. Focus on fixing the most common or problematic issues manually.
 
-6. **Manually Fix Critical Issues**: Sometimes manual intervention is needed for complex issues.
+6. **Manually Fix Critical Issues**: Sometimes manual intervention is needed for complex issues that automated tools can't handle.
 
-### Indentation Issues (Tabs vs. Spaces)
+### Indentation Issues (Whether to Use Tabs or Spaces)
 
 WordPress Coding Standards require tabs for indentation, while PSR-12 requires spaces. This creates a conflict that can cause PHPCBF to get stuck in a loop. Our configuration resolves this by:
 
@@ -147,6 +256,7 @@ You can temporarily exclude specific sniffs on the command line:
 ```bash
 composer run-script phpcs -- --exclude=Squiz.Commenting.InlineComment
 ```
+Multiple rules should be separated by commas with no spaces between them. Remember that on the command line, you can only use the 3-part format (`Standard.Category.Sniff`).
 
 ### Creating a Baseline
 
@@ -155,8 +265,14 @@ For existing projects with many violations, consider creating a baseline that ig
 composer run-script phpcs -- --report=json > phpcs-baseline.json
 ```
 
+## Version Compatibility
+
+This project uses PHP_CodeSniffer 3.7.x, which is no longer the latest version. We use this specific version because the WordPress Coding Standards package is not yet fully compatible with PHP_CodeSniffer 4.x.
+
 ## References
 
 - [PHP_CodeSniffer Documentation](https://github.com/squizlabs/PHP_CodeSniffer/wiki)
-- [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/wordpress-coding-standards/)
+- [PHP_CodeSniffer 3.x GitHub](https://github.com/PHPCSStandards/PHP_CodeSniffer) - The version we use for WordPress compatibility
+- [WordPress Coding Standards](https://github.com/WordPress/WordPress-Coding-Standards) - Requires PHP_CodeSniffer 3.7.x
+- [WordPress Coding Standards Documentation](https://developer.wordpress.org/coding-standards/wordpress-coding-standards/)
 - [PSR-12 Coding Standards](https://www.php-fig.org/psr/psr-12/)

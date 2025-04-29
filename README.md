@@ -32,11 +32,13 @@ This repository contains a comprehensive testing framework designed specifically
   - **Mockery**: General-purpose mocking
   - **PHPUnit Polyfills**: Cross-version compatibility
 - **Code Quality Tools**:
-  - **PHP_CodeSniffer**: Code style and standards checking
-  - **WordPress Coding Standards**: WordPress-specific standards
-  - **PHP Compatibility**: Version compatibility checking
-  - **PHP CS Fixer**: Automatic code style fixes
-  - **PHPStan**: Static analysis for bug detection
+  - **PHP_CodeSniffer (PHPCS/PHPCBF)**: Code style checking and automatic fixing
+    - Configured with practical rule exclusions for WordPress developers
+    - Includes fixes for common PHPCBF issues that prevent it from running successfully
+    - Custom scripts to handle spaces-to-tabs conversion efficiently
+  - **WordPress Coding Standards**: WordPress-specific coding standards
+  - **PHP Compatibility**: PHP version compatibility checking
+  - **PHPStan**: Static analysis for finding bugs and type errors
 - **Convenient Composer Scripts**: Ready-to-use commands for testing, code quality checks, and development workflows
 
 ## Requirements
@@ -132,9 +134,10 @@ phpunit-testing/
 
 ## Requirements
 
-- PHP 7.4 or higher
+- PHP 8.1 or higher (probably works with lower)
 - Composer
 - PHPUnit 9.0 or higher
+- Meant for WordPress version 6.1 or higher
 
 ## License
 

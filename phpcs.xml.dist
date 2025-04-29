@@ -26,7 +26,7 @@
         <exclude name="WordPress.Files.FileName"/>
         <exclude name="WordPress.WP.I18n"/>
         <exclude name="WordPress.WP.GlobalVariablesOverride"/>
-        
+
         <!-- Exclude minor formatting rules that don't affect functionality -->
         <exclude name="Squiz.Commenting.InlineComment.InvalidEndChar"/>
         <exclude name="PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket"/>
@@ -34,7 +34,9 @@
         <exclude name="Generic.Formatting.MultipleStatementAlignment"/>
         <exclude name="WordPress.Arrays.ArrayIndentation"/>
         <exclude name="WordPress.WhiteSpace.OperatorSpacing"/>
-        <!-- Exclude spaces-to-tabs conversion to prevent PHPCBF from getting stuck -->
+        <exclude name="WordPress.WhiteSpace.ControlStructureSpacing"/>
+        <exclude name="WordPress.PHP.YodaConditions"/>
+        <!-- Exclude spaces-to-tabs conversion to prevent PHPCBF from getting stuck, use composer run-script spaces_to_tabs instead -->
         <exclude name="Generic.WhiteSpace.DisallowSpaceIndent"/>
     </rule>
 
