@@ -48,11 +48,11 @@ This repository contains a comprehensive testing framework designed specifically
 - WordPress 6.1 or higher (for integration tests)
 - Composer
 
-## Why Separate Test Types?
+## Why Separate PHPUnit Test Types?
 
-The clean separation of test types is a key differentiator of this framework compared to most WordPress testing approaches. This separation provides several important benefits:
+The clean separation of PHPUnit test types is a key differentiator of this framework compared to most WordPress testing approaches. This separation provides several important benefits:
 
-- **Clearer Test Organization**: No confusion about which mocking approach to use
+- **Clearer Test Organization**: No confusion about which mocking approach to use; ability to run multiple test types on the same file (e.g., unit tests for specific returns from known inputs, and integration tests to verify WordPress database and Admin page interactions)
 - **Simplified Debugging**: Issues in one test type don't affect others
 - **Easier Maintenance**: Each test type can evolve independently
 - **Better Developer Experience**: Clear, dedicated paths for each testing need

@@ -9,7 +9,7 @@ This document provides detailed information about using PHP_CodeSniffer (PHPCS) 
 PHPCS detects violations of coding standards in your PHP code:
 
 ```bash
-# Basic usage
+# Basic usage, check PHP files in your project (excludes vendor/, .git/, and other paths in .gitignore)
 composer run-script phpcs
 
 # Check a specific file
@@ -22,7 +22,7 @@ composer run-script phpcs -- -s
 composer run-script phpcs -- --report=summary
 
 # Generate documentation of all rules
-composer run-script phpcs -- -s --generator=markdown --report-file=docs/analysis/phpcs-rules-described.md
+composer run-script phpcs -- -s --generator=markdown > docs/analysis/phpcs-rules-described.md
 ```
 
 ### PHPCBF (PHP Code Beautifier and Fixer)
@@ -30,7 +30,7 @@ composer run-script phpcs -- -s --generator=markdown --report-file=docs/analysis
 PHPCBF automatically fixes many of the issues detected by PHPCS, so often will run it before PHPCS:
 
 ```bash
-# Basic usage
+# Basic usage, beautify/fix PHP files in your project (excludes vendor/, .git/, and other paths in .gitignore)
 composer run-script phpcbf
 
 # Fix a specific file
@@ -45,7 +45,7 @@ composer run-script phpcbf -- -i
 
 ## Configuration for Both PHPCS and PHPCBF
 
-Both are actually part of one library, and use the same configuration file.
+Both are actually part of one library, and use the same configuration file and (mostly) the same command line parameters.
 
 This project uses a customized configuration file for them, in `phpcs.xml.dist` that:
 
@@ -64,7 +64,7 @@ This project excludes certain formatting rules that don't affect functionality:
 - `WordPress.Arrays.ArrayIndentation`: Precise array indentation
 - `WordPress.WhiteSpace.OperatorSpacing`: Spacing around operators
 
-These exclusions focus the code quality tools on catching actual bugs. They exclude minor formatting issues, that WordPress plugins don't need to be concerned about, and would require manually editing a lot of code.
+These exclusions focus the code quality tools on catching actual bugs. They exclude minor formatting issues, that WordPress plugin developers don't need to be concerned about, and would require manually editing a lot of code. Still, is a good coding practice to write new code following these formatting standards.
 
 ## Troubleshooting
 
@@ -152,6 +152,8 @@ When PHPCBF gets stuck in a loop or can't fix certain issues, you may need to id
 
    This output shows PHPCBF hit the 50-pass limit while processing these specific rules. They are good candidates for exclusion.
 
+   You might have to add exclusions and run PHPCBF again to find other rules to exclude.
+
 4. **Understanding Rule Formats**:
    - **Sniff Code (3-part)**: `Standard.Category.Sniff` - Used with command line `--exclude`
    - **Message Code (4-part)**: `Standard.Category.Sniff.MessageCode` - Used in XML configuration
@@ -184,7 +186,11 @@ Once you've identified the problematic rules, you can add them to your phpcs.xml
     <exclude name="PEAR.Functions.FunctionCallSignature"/>
 </rule>
 ```
-In phpcs.xml.dist, you can use either the 3-part format ("Rule.Category.Sniff") or the 4-part format ("Rule.Category.Sniff.MessageCode"). Using the 3-part format excludes the entire sniff and all its messages, while the 4-part format lets you target specific message types within a sniff. Use the most specific exclusion that solves your problem.
+**Understanding Rule Formats**:
+- **Sniff Code (3-part)**: `Standard.Category.Sniff` - Used with command line `--exclude` and in XML configuration
+- **Message Code (4-part)**: `Standard.Category.Sniff.MessageCode` - Used only in XML configuration
+
+When using `--exclude` on the command line, you can only exclude at the sniff level (3-part), which excludes all messages from that sniff. In the XML configuration file, you can use either format - the 3-part format excludes the entire sniff and all its messages, while the 4-part format lets you target specific message types within a sniff. Use the most specific exclusion that solves your problem.
 
 Note: The `<exclude>` elements must be inside the specific `<rule ref>` block they apply to. Rules from different standards (WordPress, PSR12, etc.) need to be excluded within their respective rule blocks.
 
@@ -211,19 +217,18 @@ These were systematically identified by running PHPCBF with different exclusions
    ```
    This can help bypass rules that might be causing PHPCBF to get stuck in a loop. Note that multiple rules should be separated by commas with no spaces between them.
 
-   **Understanding Rule Formats**:
-   - **Sniff Code (3-part)**: `Standard.Category.Sniff` - Used with command line `--exclude`
-   - **Message Code (4-part)**: `Standard.Category.Sniff.MessageCode` - Used in XML configuration
-
-   When using `--exclude` on the command line, you can only exclude at the sniff level (3-part), which excludes all messages from that sniff. In the XML configuration file, you can exclude at the message level (4-part) for more fine-grained control.
-
 5. **Use PHPCS to Identify Specific Issues**:
    ```bash
    composer run-script phpcs -- -s path/to/file.php
    ```
    The `-s` parameter shows the sniff codes for each violation, making it easier to identify which rules to exclude. Focus on fixing the most common or problematic issues manually.
 
-6. **Manually Fix Critical Issues**: Sometimes manual intervention is needed for complex issues that automated tools can't handle.
+6. **Manually Fix Critical Issues**: 
+   PHPCBF will indicate issues it can't fix in several ways:
+   - When you see "FAILED TO FIX" messages for specific files - PHPCBF doesn't show which specific issues it couldn't fix, so run `composer run-script phpcs -- -s path/to/file.php` afterward to see the remaining issues with their sniff codes
+   - When PHPCBF reports "ERROR" with "made 50 passes" (hit the maximum iteration limit) - try excluding problematic rules as described in the "Identifying Rules to Exclude" section above
+   
+   For these cases, you'll need to manually edit the files. The most common unfixable issues involve complex nested structures, multi-line function calls, or conflicting rule requirements.
 
 ### Indentation Issues (Whether to Use Tabs or Spaces)
 

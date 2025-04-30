@@ -192,7 +192,7 @@ function get_database_settings(
 
 **Location**: `/bin/setup-plugin-tests.php` (main execution section)
 
-**Purpose**: Validates that the WordPress root directory contains expected WordPress files and directories.
+**Purpose**: Validates that the WordPress root directory contains (a few expected) WordPress files and directories.
 
 **Parameters**:
 - Uses global variables:
