@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<ruleset name="GL WordPress PHPUnit Testing Framework">
-    <description>Coding standards for GL WordPress PHPUnit Testing Framework</description>
+<ruleset name="YOUR PLUGIN's NAME">
+    <description>Coding standards for YOUR PLUGIN</description>
 
     <!-- Scan all files in directory -->
     <file>.</file>

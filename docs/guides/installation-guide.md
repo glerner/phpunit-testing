@@ -4,13 +4,36 @@ This guide provides step-by-step instructions for installing PHPUnit and related
 
 ## Table of Contents
 
+- [Included Tools](#included-tools)
 - [Prerequisites](#prerequisites)
+- [Development Workflow](#development-workflow)
 - [Installing PHPUnit](#installing-phpunit)
 - [Installing WP_Mock](#installing-wp_mock)
 - [Installing Brain\Monkey](#installing-brainmonkey)
 - [Setting Up WordPress Test Library](#setting-up-wordpress-test-library)
 - [Configuring Composer](#configuring-composer)
 - [Troubleshooting](#troubleshooting)
+
+## Included Tools
+
+The framework includes a comprehensive set of development tools to support different testing approaches and code quality standards:
+
+### Testing Libraries
+
+- **PHPUnit** (`phpunit/phpunit`): The core testing framework
+- **WP_Mock** (`10up/wp_mock`): WordPress function mocking library
+- **Brain\Monkey** (`brain/monkey`): WordPress hooks and functions mocking
+- **Mockery** (`mockery/mockery`): General-purpose mocking framework
+- **PHPUnit Polyfills** (`yoast/phpunit-polyfills`): Compatibility layer for different PHPUnit versions
+
+### Code Quality Tools
+
+- **PHP_CodeSniffer** (`squizlabs/php_codesniffer`): Code style and standards checking
+- **WordPress Coding Standards** (`wp-coding-standards/wpcs`): WordPress-specific coding standards
+- **PHP Compatibility** (`phpcompatibility/phpcompatibility-wp`): PHP version compatibility checking
+- **PHP CS Fixer** (`friendsofphp/php-cs-fixer`): Automatically fix code style issues
+- **PHPStan** (`phpstan/phpstan`): Static analysis tool to find bugs
+- **PHPStan WordPress** (`szepeviktor/phpstan-wordpress`): WordPress-specific static analysis rules
 
 ## Prerequisites
 
@@ -21,21 +44,41 @@ Before installing the testing tools, ensure you have:
 - Git (for cloning repositories)
 - MySQL/MariaDB (for integration tests)
 
+## Development Workflow
+
+### Recommended: Develop Outside WordPress
+
+We strongly recommend developing your plugin **outside** your WordPress installation for several reasons:
+
+1. **Better Git Management**: Keeps WordPress core files separate from your plugin repository
+2. **Safer Development**: Prevents accidental deletion of your plugin code when rebuilding WordPress
+3. **Cleaner Environment**: Provides better separation of concerns
+
+With this approach, you'll:
+1. Develop your plugin in a separate directory
+2. Use `composer sync:wp` to sync changes to your WordPress installation
+3. Run tests against your WordPress installation
+
+### Alternative: Develop Inside WordPress
+
+Alternatively, you can develop directly in your WordPress installation's plugins directory, though this is not recommended for the reasons mentioned above.
+
 ## Installing PHPUnit
 
-Start from in your plugin's folder, in your WordPress installation.
-
-PHPUnit is the core testing framework we'll use. We recommend installing it via Composer:
+PHPUnit is the core testing framework we'll use. We recommend installing it via Composer in your plugin development directory (outside WordPress) as this framework also includes tools that will work before testing in WordPress, such as static code quality tests.
 
 ```bash
-# use your actual location
-cd ~/sites/wordpress/wp-content/plugins/your-project
+# Navigate to your plugin project directory (outside WordPress)
+cd ~/sites/your-plugin-project
 
 # Add PHPUnit as a dev dependency
+# This will create or update your composer.json
 composer require --dev phpunit/phpunit ^9.0
 ```
 
-> **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+, PHPUnit 9.x is recommended.
+When you run the setup script later, your composer.json and the installed dependencies will be copied to your WordPress plugin directory.
+
+> **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+ and PHP 8.0+, PHPUnit 9.x is recommended.
 
 ## Installing WP_Mock
 
@@ -86,7 +129,7 @@ Edit the `.env.testing` file to match your environment. The most important setti
 
 ### WordPress and Test Library Paths
 - `WP_ROOT`: Path to your WordPress installation (e.g., `/app` in Lando or `/home/username/sites/wordpress` on local machine)
-- `WP_TESTS_DIR`: Path to the WordPress test library
+- `WP_TESTS_DIR`: Path to the WordPress test library where PHPUnit will be installed (normally 'wp-content/plugins/wordpress-develop/tests/phpunit')
 
 ### Database Configuration
 - `WP_TESTS_DB_NAME`: Name of the test database (required by PHPUnit's WordPress testing library, should be `wordpress_test`)
@@ -94,9 +137,9 @@ Edit the `.env.testing` file to match your environment. The most important setti
 - `WP_TESTS_DB_PASSWORD`: Database password
 - `WP_TESTS_DB_HOST`: Database host
 
-### Framework Development (if applicable)
+### PHPUnit Testing Framework Development
 - `FILESYSTEM_WP_ROOT`: Path to WordPress on your local filesystem (without trailing slash)
-- `FRAMEWORK_DEST_NAME`: Name of the WordPress plugin directory where the framework will be synced
+- `FRAMEWORK_DEST_NAME`: Name of your plugin's directory in WordPress (your-plugin-name). The full path to your plugin folder will be FILESYSTEM_WP_ROOT/wp-content/plugins/FRAMEWORK_DEST_NAME
 
 ### Test Configuration
 - `TEST_ERROR_LOG`: Path to error log file
@@ -117,9 +160,11 @@ WP_TESTS_DB_USER=wordpress
 WP_TESTS_DB_PASSWORD=wordpress
 WP_TESTS_DB_HOST=database
 
-# Framework development (if developing the framework itself)
+# Path to your WordPress installation (without trailing slash)
 FILESYSTEM_WP_ROOT=/home/username/sites/wordpress  # Your local path, not container path
-FRAMEWORK_DEST_NAME=gl-phpunit-testing-framework
+
+# Your plugin's directory name in WordPress
+FRAMEWORK_DEST_NAME=your-plugin-name
 
 # Test configuration
 TEST_ERROR_LOG=/tmp/phpunit-testing-error.log
@@ -143,7 +188,18 @@ Before running the script, make sure your `.env.testing` file has the correct `S
 # - SSH_COMMAND=lando ssh     # For Lando environments
 # - SSH_COMMAND=yourcommand   # Whatever command you need for your specific environment
 
-# Then run the setup script from your plugin directory
+```
+
+If your plugin directory doesn't exist yet in WordPress, create it with:
+
+```bash
+composer sync:wp
+```
+
+This will copy your plugin files to WordPress
+
+Then run the setup script from your plugin development directory. This will install the test framework in your WordPress plugin directory:
+```bash
 php bin/setup-plugin-tests.php
 ```
 
@@ -160,27 +216,101 @@ This script will:
 
 ### Test Directory Structure
 
-The framework uses a modular approach to organize test files and results:
+The framework uses a modular approach to organize test files and results. Each plugin maintains its own separate test files and results in the `tests/` directory:
 
-1. **Plugin-specific test directories**: Each plugin maintains its own separate test files and results
+1. **Plugin-specific test directories**: The framework adds the following structure to your plugin for your own test files:
    ```
    your-plugin-directory/
    ├── tests/                 # Your test files
-   │   ├── unit/              # Unit tests
-   │   ├── integration/       # Integration tests
-   │   └── wp-mock/           # WP_Mock tests
-   ├── build/                 # Test results (created by setup script)
-   │   ├── logs/              # Test logs
-   │   └── coverage/          # Coverage reports
+   │   ├── Integration/      # Integration tests
+   │   ├── Unit/             # Unit tests
+   │   └── WP_Mock/          # WP_Mock tests
    └── ...
    ```
 
-2. **Multiple plugins support**: When testing multiple plugins in a single WordPress installation, each plugin maintains its own isolated test environment and results
+   After installation, the testing framework creates this structure in your WordPress plugin directory:
+
+   ```
+   wp-content/plugins/your-plugin-name/
+   ├── tests/                       # Test directory
+   │   ├── bootstrap.php           # Test initialization file
+   │   ├── Integration/            # Integration tests directory
+   │   │   └── SampleTest.php      # Sample integration test
+   │   ├── Unit/                   # Unit tests directory
+   │   │   └── SampleTest.php      # Sample unit test
+   │   └── WP_Mock/                # WP_Mock tests directory
+   │       └── SampleTest.php      # Sample WP_Mock test
+   ├── phpunit.xml                 # PHPUnit configuration
+   ├── phpcs.xml.dist              # PHP CodeSniffer configuration
+   ├── phpstan.neon.dist           # PHPStan configuration
+   ├── composer.json               # Composer configuration with testing tools
+   └── build/                      # Test results (created by PHPUnit)
+       ├── logs/                   # Test logs
+       └── coverage/               # Coverage reports
+   ```
+
+2. **Multiple plugins support**: When testing multiple plugins in a single WordPress installation, each plugin maintains its own isolated test folders, test database and test results. Add this to each plugin's .env.testing file:
+
+```
+WP_PHPUNIT_TABLE_PREFIX=yourplugin_test_
+```
 
 3. **Version control**: Since test results are stored within your plugin directory, you can:
    - Include them in version control to track test coverage over time
    - Exclude them by adding `/build/` to your `.gitignore` file
    - Share test configurations while ignoring environment-specific results
+
+4. **Customizable code quality tools**: The framework provides template configuration files that you can customize:
+   - `phpcs.xml.dist` is the template for PHP CodeSniffer rules
+   - Create your own `phpcs.xml` based on this template for custom rules
+   - PHP CodeSniffer will use your custom `phpcs.xml` if it exists, otherwise it falls back to `phpcs.xml.dist`
+
+### Customizing PHP CodeSniffer Configuration
+
+To customize PHP CodeSniffer configuration, you can create a `phpcs.xml` file in your plugin's root directory by copying `phpcs.xml.dist` to `phpcs.xml`. This file will override the default `phpcs.xml.dist` configuration.
+
+Here are the key sections you should *customize* in your `phpcs.xml` file:
+
+```xml
+<ruleset name="YOUR PLUGIN's NAME">
+    <description>Coding standards for YOUR PLUGIN</description>
+
+    <!-- Set text domain - CUSTOMIZE THIS FOR YOUR PROJECT -->
+    <config name="text_domain" value="your-plugin-text-domain"/>
+
+    <!-- Set prefixes for checking naming conventions - CUSTOMIZE THESE FOR YOUR PROJECT -->
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="Your_Plugin"/><!-- For constants and class names -->
+                <element value="your_plugin"/><!-- For functions and global variables -->
+                <element value="Your_Plugin\\"/><!-- For namespaces -->
+            </property>
+        </properties>
+    </rule>
+</ruleset>
+```
+
+These customizations ensure your plugin follows WordPress coding standards while using your specific text domain and prefixes for functions, classes, and namespaces.
+
+**Note the different prefix formats required by WordPress standards:**
+
+1. `Your_Plugin` (PascalCase with underscores)
+   - Used for class names: `class Your_Plugin_Admin {}`
+   - Used for constants: `const YOUR_PLUGIN_VERSION = '1.0.0';`
+   - Follows WordPress class naming convention (not PSR-12)
+
+2. `your_plugin` (snake_case)
+   - Used for functions: `function your_plugin_init() {}`
+   - Used for global variables: `global $your_plugin_settings;`
+   - Follows WordPress function naming convention
+
+3. `Your_Plugin\\` (PascalCase with double backslash)
+   - Used for namespaces: `namespace Your_Plugin\Admin;`
+   - The double backslash is needed in XML (one backslash is the escape character)
+   - In your PHP code, you'll use a single backslash: `namespace Your_Plugin\Admin;`
+
+You can also customize the PHP CodeSniffer configuration by adding your own rules or modifying the existing ones.
 
 ### Database Configuration
 
@@ -212,17 +342,69 @@ WP_TESTS_DB_PASSWORD=wordpress
 WP_TESTS_DB_NAME=wordpress_test
 ```
 
-Then run the setup script from your plugin directory on your local machine:
+## Setting Up Your Plugin for Testing
+
+### Standard Development Workflow
+
+Follow these steps for normal plugin development:
+
+1. Configure your `.env.testing` file with the correct WordPress path:
+
+```
+# The path to your WordPress installation
+FILESYSTEM_WP_ROOT=/home/username/sites/wordpress
+
+# The name of your plugin's directory in WordPress
+# wp-content/plugins/your-plugin-name
+FRAMEWORK_DEST_NAME=your-plugin-name
+```
+
+2. Sync your plugin files to WordPress and set up the test suite:
 
 ```bash
-# First sync your files if working outside the WordPress directory
+# First sync your plugin files to the WordPress plugins directory
 composer sync:wp
 
-# Then run the setup script
+# Then run the setup script from your plugin development directory
 php bin/setup-plugin-tests.php
 ```
 
-The script will use `lando ssh` automatically for database operations while performing filesystem operations locally.
+The setup script will:
+- Install the WordPress test framework in your WordPress installation
+- Configure the test database
+- Install compatibility files if needed
+
+When using Lando, the script will automatically use `lando ssh` for database operations while performing filesystem operations locally.
+
+## Development Workflow Options
+
+This framework supports several development workflows:
+
+1. **Local Development** (Recommended)
+   - Develop your plugin in a separate directory outside WordPress
+   - Run code quality tools:
+     ```bash
+     # Fix coding standards issues automatically
+     composer run phpcbf
+
+     # Check for remaining coding standards issues
+     composer run phpcs
+     ```
+   - Use `composer sync:wp` to copy files to your local WordPress installation
+   - Run tests against your local WordPress database
+   - Lando or Local (by Flywheel) make it easy to test in different WordPress/PHP/MySQL environments
+
+2. **Team Development**
+   - Follow the same local development workflow
+   - Use version control (Git) to share code with team members
+   - Each team member can test locally before committing changes
+
+3. **Advanced: Remote/Staging Testing**
+   - Configure `.env.testing` with appropriate SSH and database settings
+   - Use the same setup script with remote paths
+   - The framework will handle the different environment automatically
+
+The configuration options in `.env.testing` are flexible enough to support all these workflows without additional customization.
 
 ## Configuring Composer
 
@@ -262,28 +444,7 @@ Here's a sample `composer.json` configuration for a WordPress plugin with testin
 }
 ```
 
-## Included Composer Configuration
-
-The framework includes a comprehensive `composer.json` with a variety of development tools to support different testing approaches and code quality standards:
-
-### Testing Libraries
-
-- **PHPUnit** (`phpunit/phpunit`): The core testing framework
-- **WP_Mock** (`10up/wp_mock`): WordPress function mocking library
-- **Brain\Monkey** (`brain/monkey`): WordPress hooks and functions mocking
-- **Mockery** (`mockery/mockery`): General-purpose mocking framework
-- **PHPUnit Polyfills** (`yoast/phpunit-polyfills`): Compatibility layer for different PHPUnit versions
-
-### Code Quality Tools
-
-- **PHP_CodeSniffer** (`squizlabs/php_codesniffer`): Code style and standards checking
-- **WordPress Coding Standards** (`wp-coding-standards/wpcs`): WordPress-specific coding standards
-- **PHP Compatibility** (`phpcompatibility/phpcompatibility-wp`): PHP version compatibility checking
-- **PHP CS Fixer** (`friendsofphp/php-cs-fixer`): Automatically fix code style issues
-- **PHPStan** (`phpstan/phpstan`): Static analysis tool to find bugs
-- **PHPStan WordPress** (`szepeviktor/phpstan-wordpress`): WordPress-specific static analysis rules
-
-### Composer Scripts
+## Composer Scripts
 
 The framework also includes convenient scripts for common tasks:
 

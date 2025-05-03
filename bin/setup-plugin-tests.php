@@ -335,6 +335,32 @@ function format_ssh_command( string $ssh_command, string $command ): string {
 }
 
 /**
+ * Format PHP command with proper escaping for file paths
+ *
+ * @param string $php_command The PHP command to use (e.g., 'php', 'lando php')
+ * @param array  $arguments   Array of arguments to pass to the PHP command
+ * @param bool   $is_lando    Whether this is a Lando command (affects escaping)
+ * @return string Formatted PHP command
+ */
+function format_php_command( string $php_command, array $arguments, bool $is_lando = false ): string {
+    $escaped_args = [];
+    
+    // Escape each argument
+    foreach ($arguments as $arg) {
+        // Escape any double quotes in the argument
+        $escaped_arg = str_replace('"', '\"', $arg);
+        
+        // Add the escaped argument with double quotes to handle spaces
+        $escaped_args[] = "\"{$escaped_arg}\"";
+    }
+    
+    // Combine the command with escaped arguments
+    $command = $php_command . ' ' . implode(' ', $escaped_args) . ' 2>&1';
+    
+    return $command;
+}
+
+/**
  * Format MySQL command with proper parameters and SQL command
  *
  * @param string      $host Database host
@@ -931,15 +957,29 @@ EOT;
 
     // Capture output for debugging
     $output = array();
-    $command = "$php_command $install_path $config_path 2>&1";
-    echo "Debug: PHP command: $php_command $install_path $config_path\n";
-    echo "Debug: Executing: $command\n";
+
+    // For Lando PHP commands, we need to be careful with quotes
+    if ($targeting_lando) {
+        $command = format_php_command('lando php', [$install_path, $config_path], true);
+    } else {
+        $command = format_php_command($php_command, [$install_path, $config_path], false);
+    }
+
+    echo "Debug: PHP command to execute: $command\n";
     exec($command, $output, $return_var);
 
     // Display output
     echo "Debug: Command output:\n";
     echo implode("\n", $output) . "\n";
     echo "Debug: Return code: $return_var\n";
+
+    // Check for common Lando errors
+    if ($return_var !== 0 && $targeting_lando) {
+        $output_str = implode("\n", $output);
+        if (strpos($output_str, 'Usage:') !== false && strpos($output_str, 'lando <command>') !== false) {
+            echo COLOR_RED . "Error: Lando command failed. Make sure Lando is running with 'lando start'" . COLOR_RESET . "\n";
+        }
+    }
 
     // Install compatibility files for modern WordPress
     echo "Installing compatibility files for modern WordPress...\n";

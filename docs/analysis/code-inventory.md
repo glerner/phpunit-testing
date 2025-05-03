@@ -463,6 +463,47 @@ function format_ssh_command(string $ssh_command, string $command): string
 
 **Special Handling**:
 - Adds proper quoting to ensure command executes correctly in the SSH environment
+
+### `format_php_command()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function format_php_command( string $php_command, array $arguments, bool $is_lando = false ): string
+```
+
+**Purpose**: Formats PHP commands with proper escaping for file paths, ensuring they work correctly with spaces and special characters.
+
+**Parameters**:
+- `$php_command`: The PHP command to use
+  - Type: string
+  - Required: Yes
+  - Example: 'php', 'lando php'
+
+- `$arguments`: Array of arguments to pass to the PHP command
+  - Type: array
+  - Required: Yes
+  - Example: [$install_path, $config_path]
+
+- `$is_lando`: Whether this is a Lando command (affects escaping)
+  - Type: bool
+  - Required: No
+  - Default: false
+
+**Return Value**: String containing the properly formatted command with escaped arguments
+
+**Logic Flow**:
+1. Initialize an empty array for escaped arguments
+2. For each argument, escape any double quotes
+3. Wrap each argument in double quotes to handle spaces
+4. Combine the command with escaped arguments
+5. Return the final formatted command
+
+**Special Handling**:
+- Properly escapes double quotes in path arguments
+- Wraps arguments in double quotes to handle paths with spaces
+- Adds standard error redirection (2>&1) to capture all output
 - Redirects stderr to stdout with `2>&1` for comprehensive output capture
 
 ### `format_mysql_command()`
