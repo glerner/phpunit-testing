@@ -3,30 +3,39 @@
  * Example WP_Mock Test
  *
  * This is a template for a WP_Mock test that demonstrates how to use
- * the GL WordPress Testing Framework for testing code that interacts
+ * the WP PHPUnit Framework for testing code that interacts
  * with WordPress functions and hooks.
  *
  * NOTE: This is a template file and will show IDE errors since the referenced
  * classes don't exist. You should copy this file to your plugin's test directory
  * and modify it to match your plugin's structure before using it.
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage Examples
  */
 
 declare(strict_types=1);
 
-namespace YourPlugin\Tests\WP_Mock;
+// This PHPCS comment disables the namespace prefix check for this example file.
+// You should remove this comment once you've replaced the namespaces with your own.
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
 
-use GL\Testing\Framework\WP_Mock\WP_Mock_Test_Case;
-use YourPlugin\WordPress_Integration;
+// IMPORTANT: When copying this template to your plugin:
+// 1. Replace 'YourPlugin' with your plugin's namespace (e.g., 'My_Plugin')
+// 2. Replace 'WordPress_Integration' with your actual class name to test
+// 3. The recommended structure is: YourPluginName\Tests\WP_Mock\Classes
+namespace YourPlugin\Tests\WP_Mock\Classes;
+
+// Import the base test case from the WP_PHPUnit_Framework
+use WP_PHPUnit_Framework\WP_Mock\WP_Mock_Test_Case;
+use YourPlugin\Classes\WordPress_Integration;
 use WP_Mock;
 use Brain\Monkey\Functions;
 
 /**
  * Example WP_Mock Test class
  *
- * @covers \YourPlugin\WordPress_Integration
+ * @covers \YourPlugin\Classes\WordPress_Integration
  */
 class Example_WP_Mock_Test extends WP_Mock_Test_Case {
 	/**
@@ -165,3 +174,4 @@ class Example_WP_Mock_Test extends WP_Mock_Test_Case {
 		$this->assertTrue($result);
 	}
 }
+// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound

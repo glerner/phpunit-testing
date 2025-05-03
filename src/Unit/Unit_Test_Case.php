@@ -5,14 +5,14 @@
  * This is an abstract base class for unit tests and is not meant to contain
  * any tests itself. It provides common functionality for all unit test classes.
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage Unit
  * @codeCoverageIgnore
  */
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Unit;
+namespace WP_PHPUnit_Framework\Unit;
 
 use PHPUnit\Framework\TestCase as PHPUnit_TestCase;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;

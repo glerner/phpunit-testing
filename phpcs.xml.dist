@@ -19,6 +19,7 @@
     <exclude-pattern>/node_modules/*</exclude-pattern>
     <exclude-pattern>/tests/bootstrap/*</exclude-pattern>
     <exclude-pattern>/build/*</exclude-pattern>
+    <exclude-pattern>/compat/*</exclude-pattern>
 
     <!-- Include WordPress Coding Standards -->
     <rule ref="WordPress">
@@ -44,27 +45,31 @@
     <rule ref="PSR12">
         <!-- Exclude PSR-12 indentation rule (should indent with spaces) to avoid conflict with WordPress rule (only indent with tabs) -->
         <exclude name="Generic.WhiteSpace.DisallowTabIndent"/>
+        <!-- Exclude PSR-12 class naming rule to allow WordPress-style class names with underscores -->
+        <exclude name="Squiz.Classes.ValidClassName.NotCamelCaps"/>
+        <!-- Exclude PSR-12 method naming rule to allow WordPress-style method names with underscores -->
+        <exclude name="PSR1.Methods.CamelCapsMethodName.NotCamelCaps"/>
     </rule>
 
     <!-- Include PHPCompatibility -->
     <rule ref="PHPCompatibilityWP"/>
 
-    <!-- Check for PHP cross-version compatibility -->
+    <!-- Check for PHP cross-version compatibility (hyphen means "and higher") -->
     <config name="testVersion" value="8.0-"/>
 
-    <!-- Set minimum supported WP version -->
+    <!-- Set minimum supported WordPress version -->
     <config name="minimum_supported_wp_version" value="6.1"/>
 
-    <!-- Set text domain -->
-    <config name="text_domain" value="gl-phpunit-testing"/>
+    <!-- Set text domain - CUSTOMIZE THIS FOR YOUR PROJECT -->
+    <config name="text_domain" value="your-plugin-text-domain"/>
 
-    <!-- Set prefixes for checking naming conventions -->
+    <!-- Set prefixes for checking naming conventions - CUSTOMIZE THESE FOR YOUR PROJECT -->
     <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
         <properties>
             <property name="prefixes" type="array">
-                <element value="GL_Testing"/>
-                <element value="gl_testing"/>
-                <element value="GL\\Testing"/>
+                <element value="Your_Plugin"/><!-- For constants and class names -->
+                <element value="your_plugin"/><!-- For functions and global variables -->
+                <element value="Your_Plugin\\"/><!-- For namespaces -->
             </property>
         </properties>
     </rule>

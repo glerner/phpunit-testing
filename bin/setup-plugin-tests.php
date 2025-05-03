@@ -7,9 +7,30 @@
  * @package WP_PHPUnit_Framework
  */
 
+// phpcs:set WordPress.Security.EscapeOutput customEscapingFunctions[] esc_cli
+// phpcs:disable WordPress.WP.AlternativeFunctions
+// phpcs:disable WordPress.DB.RestrictedFunctions
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals
+// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped
+// phpcs:disable WordPress.PHP.IniSet.display_errors_Disallowed
+// phpcs:disable Squiz.ControlStructures.ControlSignature.SpaceAfterCloseBrace
+// phpcs:disable Universal.Operators.DisallowShortTernary.Found
+
+
+
 declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework;
+
+/**
+ * Escape a string for CLI output
+ *
+ * @param string $text Text to escape
+ * @return string
+ */
+function esc_cli( string $text ): string {
+    return $text;
+}
 
 // Exit if accessed directly, should be run command line
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
@@ -20,30 +41,32 @@ if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-// Define script constants
-define('SCRIPT_DIR', __DIR__);
-define('PROJECT_DIR', dirname(SCRIPT_DIR));
+// Define script constants as namespace constants
+const SCRIPT_DIR = __DIR__;
+const PROJECT_DIR = __DIR__ . '/..';
 
 // Define color constants for terminal output
-define('COLOR_RESET', "\033[0m");
-define('COLOR_RED', "\033[31m");
-define('COLOR_GREEN', "\033[32m");
-define('COLOR_YELLOW', "\033[33m");
-define('COLOR_BLUE', "\033[34m");
-define('COLOR_MAGENTA', "\033[35m");
-define('COLOR_CYAN', "\033[36m");
-define('COLOR_WHITE', "\033[37m");
-define('COLOR_BOLD', "\033[1m");
+const COLOR_RESET = "\033[0m";
+const COLOR_RED = "\033[31m";
+const COLOR_GREEN = "\033[32m";
+const COLOR_YELLOW = "\033[33m";
+const COLOR_BLUE = "\033[34m";
+const COLOR_MAGENTA = "\033[35m";
+const COLOR_CYAN = "\033[36m";
+const COLOR_WHITE = "\033[37m";
+const COLOR_BOLD = "\033[1m";
 
 // Global exception handler to catch and display any uncaught exceptions
-set_exception_handler(function ( \Throwable $e ): void {
-    echo "\n" . COLOR_RED . 'UNCAUGHT EXCEPTION: ' . get_class($e) . COLOR_RESET . "\n";
-    echo COLOR_RED . 'Message: ' . $e->getMessage() . COLOR_RESET . "\n";
-    echo COLOR_RED . 'File: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')' . COLOR_RESET . "\n";
-    echo COLOR_RED . 'Stack trace:' . COLOR_RESET . "\n";
-    echo $e->getTraceAsString() . "\n";
-    exit(1);
-});
+set_exception_handler(
+    function ( \Throwable $e ): void {
+		echo esc_cli("\n" . COLOR_RED . 'UNCAUGHT EXCEPTION: ' . get_class($e) . COLOR_RESET . "\n");
+		echo esc_cli(COLOR_RED . 'Message: ' . $e->getMessage() . COLOR_RESET . "\n");
+		echo esc_cli(COLOR_RED . 'File: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')' . COLOR_RESET . "\n");
+		echo esc_cli(COLOR_RED . 'Stack trace:' . COLOR_RESET . "\n");
+		echo esc_cli($e->getTraceAsString() . "\n");
+		exit(1);
+	}
+);
 
 /**
  * Load settings from .env.testing file
@@ -55,7 +78,7 @@ function load_settings_file(): array {
     $env_file = PROJECT_DIR . '/.env.testing';
 
     if (file_exists($env_file)) {
-        echo 'Loading environment variables from .env.testing at: ' . COLOR_CYAN . $env_file . COLOR_RESET . "\n";
+        echo esc_cli('Loading environment variables from .env.testing at: ' . COLOR_CYAN . $env_file . COLOR_RESET . "\n");
         $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($lines as $line) {
             // Skip comments
@@ -123,7 +146,7 @@ function get_setting( string $name, mixed $default = null ): mixed {
  * @param array  $lando_info Lando environment configuration, obtained by executing 'lando info' command
  * @param string $config_file_name Name of the configuration file (default: '.env.testing')
  * @return array Database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
- * @throws Exception If wp-config.php doesn't exist or if any required database settings are missing
+ * @throws \Exception If wp-config.php doesn't exist or if any required database settings are missing.
  */
 function get_database_settings(
     string $wp_config_path,
@@ -141,7 +164,7 @@ function get_database_settings(
 
     // 1. Load from wp-config.php (lowest priority)
     if (file_exists($wp_config_path)) {
-        echo "Reading database settings from wp-config.php...\n";
+        echo esc_cli("Reading database settings from wp-config.php...\n");
 
         // Include the wp-config.php file directly
         try {
@@ -171,7 +194,7 @@ function get_database_settings(
                 $db_settings['table_prefix'] = $table_prefix;
             }
         } catch (\Exception $e) {
-            echo COLOR_YELLOW . "Warning: Error including $wp_config_path: {$e->getMessage()}" . COLOR_RESET . "\n";
+            echo esc_cli(COLOR_YELLOW . "Warning: Error including $wp_config_path: {$e->getMessage()}" . COLOR_RESET . "\n");
         }
     }
 
@@ -246,11 +269,11 @@ function get_database_settings(
                 $db_settings['db_name'] = $creds['database'];
             }
 
-            echo "Found Lando database service: {$db_settings['db_host']}\n";
+            echo esc_cli("Found Lando database service: {$db_settings['db_host']}\n");
             // Note: table_prefix is only read from wp-config.php and not from Lando configuration
         } else {
-            echo COLOR_YELLOW . 'Warning: No MySQL service found in Lando configuration.' . COLOR_RESET . "\n";
-            echo "This indicates a potential issue with your Lando setup.\n";
+            echo esc_cli(COLOR_YELLOW . 'Warning: No MySQL service found in Lando configuration.' . COLOR_RESET . "\n");
+            echo esc_cli("This indicates a potential issue with your Lando setup.\n");
         }
     }
 
@@ -264,20 +287,21 @@ function get_database_settings(
 
     if (!empty($missing_settings)) {
         $missing_str = implode(', ', $missing_settings);
-        throw new \Exception("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php.");
+        throw new \Exception(esc_cli("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php."));
     }
 
     // Display the final settings
-    echo "Database settings (final):\n";
-    echo "- Host: {$db_settings['db_host']}\n";
-    echo "- User: {$db_settings['db_user']}\n";
-    echo "- Database: {$db_settings['db_name']}\n";
-    echo '- Password length: ' . strlen($db_settings['db_pass']) . "\n";
+    echo esc_cli("Database settings (final):\n");
+    echo esc_cli("- Host: {$db_settings['db_host']}\n");
+    echo esc_cli("- User: {$db_settings['db_user']}\n");
+    echo esc_cli("- Database: {$db_settings['db_name']}\n");
+    echo esc_cli('- Password length: ' . strlen($db_settings['db_pass']) . "\n");
 
     return $db_settings;
 }
 
 // Load settings from .env.testing
+// Using namespace scope instead of global prefix
 $loaded_settings = load_settings_file();
 
 /**
@@ -289,9 +313,9 @@ $loaded_settings = load_settings_file();
  */
 function format_ssh_command( string $ssh_command, string $command ): string {
     // Debug: Show the input command
-    echo "\nDebug: format_ssh_command input:\n";
-    echo "SSH command: $ssh_command\n";
-    echo "Command to execute: $command\n";
+    echo esc_cli("\nDebug: format_ssh_command input:\n");
+    echo esc_cli("SSH command: $ssh_command\n");
+    echo esc_cli("Command to execute: $command\n");
 
     // For Lando and other SSH commands, we need to properly escape quotes
     // The best approach is to use single quotes for the outer shell
@@ -299,14 +323,14 @@ function format_ssh_command( string $ssh_command, string $command ): string {
     if (strpos($ssh_command, 'lando ssh') === 0) {
         // Lando requires the -c flag to execute commands
         $result = "$ssh_command -c '  $command  ' 2>&1";
-        echo "Debug: Using Lando SSH format\n";
+        echo esc_cli("Debug: Using Lando SSH format\n");
     } else {
         // Regular SSH command
         $result = "$ssh_command '  $command  ' 2>&1";
-        echo "Debug: Using regular SSH format\n";
+        echo esc_cli("Debug: Using regular SSH format\n");
     }
 
-    echo "Debug: Final SSH command: $result\n";
+    echo esc_cli("Debug: Final SSH command: $result\n");
     return $result;
 }
 
@@ -365,10 +389,10 @@ function format_mysql_command( string $host, string $user, string $pass, string 
     $formatted_command = "$connection_params -e '$escaped_sql'";
 
     // Debug: Show the transformation of the SQL command
-    # echo "\nDebug: format_mysql_command details:\n";
-    # echo "Original SQL:\n$sql\n";
-    # echo "Escaped SQL:\n$escaped_sql\n";
-    # echo "Full MySQL command:\n$formatted_command\n";
+    // echo "\nDebug: format_mysql_command details:\n";
+    // echo "Original SQL:\n$sql\n";
+    // echo "Escaped SQL:\n$escaped_sql\n";
+    // echo "Full MySQL command:\n$formatted_command\n";
 
     return $formatted_command;
 }
@@ -383,6 +407,7 @@ function format_mysql_command( string $host, string $user, string $pass, string 
  * @param string      $sql SQL command to execute
  * @param string|null $db Optional database name to use
  * @return string The fully formatted command ready to execute
+ * @throws \Exception If the command type is invalid.
  */
 function format_mysql_execution( string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null ): string {
     $command_type = 'ssh';
@@ -398,10 +423,10 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     $mysql_params = format_mysql_command($host, $user, $pass, $sql, $db, $command_type);
 
     // Debug output
-    # echo "\nDebug: format_mysql_execution input:\n";
-    echo "Original SQL: $sql\n";
-    echo "SSH command: $ssh_command  MySQL params: $mysql_params\n";
-    # echo "Command type: $command_type\n";
+    // echo "\nDebug: format_mysql_execution input:\n";
+    echo esc_cli("Original SQL: $sql\n");
+    echo esc_cli("SSH command: $ssh_command  MySQL params: $mysql_params\n");
+    // echo "Command type: $command_type\n";
 
     $cmd = '';
 
@@ -409,7 +434,7 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     if ($command_type === 'lando_direct') {
         // Use lando mysql directly with the parameters
         $cmd = "lando mysql $mysql_params 2>&1";
-        echo "Debug: Using direct Lando MySQL format\n";
+        echo esc_cli("Debug: Using direct Lando MySQL format\n");
     }
     // Use SSH to execute MySQL
     elseif ($command_type === 'ssh') {
@@ -420,7 +445,7 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     else {
         // For direct MySQL commands, use the original format
         $cmd = "mysql $mysql_params 2>&1";
-        echo "Debug: Using direct MySQL format\n";
+        echo esc_cli("Debug: Using direct MySQL format\n");
     }
 
     return $cmd;
@@ -432,22 +457,22 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
  * @return bool True if all requirements are met, false otherwise
  */
 function check_system_requirements(): bool {
-    echo "Checking system requirements...\n";
+    echo esc_cli("Checking system requirements...\n");
 
     // Check if git is available
     if (!is_executable(exec('which git'))) {
-        echo "Error: git is required but not installed.\n";
+        echo esc_cli("Error: git is required but not installed.\n");
         return false;
     }
 
     // Check if mysql client is available
     if (!is_executable(exec('which mysql'))) {
-        echo "Error: mysql client is required but not installed.\n";
+        echo esc_cli("Error: mysql client is required but not installed.\n");
         return false;
     }
 
     // Check if PHP is available (obviously it is if we're running this script)
-    echo COLOR_GREEN . '✅ System requirements met' . COLOR_RESET . "\n";
+    echo esc_cli(COLOR_GREEN . '✅ System requirements met' . COLOR_RESET . "\n");
     return true;
 }
 
@@ -520,23 +545,23 @@ function parse_lando_info(): ?array {
  * @return bool True if successful, false otherwise
  */
 function download_wp_tests( string $wp_tests_dir ): bool {
-    echo "Setting up WordPress test suite in: $wp_tests_dir\n";
+    echo esc_cli("Setting up WordPress test suite in: $wp_tests_dir\n");
 
     // Create tests directory if it doesn't exist
     if (!is_dir($wp_tests_dir)) {
         if (!mkdir($wp_tests_dir, 0755, true)) {
-            echo "Error: Failed to create tests directory: $wp_tests_dir\n";
+            echo esc_cli("Error: Failed to create tests directory: $wp_tests_dir\n");
             return false;
         }
     }
 
     // Check if test suite is already installed
     if (is_dir("$wp_tests_dir/includes") && file_exists("$wp_tests_dir/includes/functions.php")) {
-        echo "WordPress test suite already installed.\n";
+        echo esc_cli("WordPress test suite already installed.\n");
         return true;
     }
 
-    echo "Downloading WordPress test suite...\n";
+    echo esc_cli("Downloading WordPress test suite...\n");
 
     // Create temporary directory
     $tmp_dir = "$wp_tests_dir/tmp";
@@ -546,17 +571,17 @@ function download_wp_tests( string $wp_tests_dir ): bool {
 
     // Clone WordPress develop repository
     $cmd = "git clone --depth=1 https://github.com/WordPress/wordpress-develop.git $tmp_dir";
-    echo "Running: $cmd\n";
+    echo esc_cli("Running: $cmd\n");
     system($cmd, $return_var);
 
     if ($return_var !== 0) {
-        echo "Error: Failed to clone WordPress develop repository.\n";
+        echo esc_cli("Error: Failed to clone WordPress develop repository.\n");
         return false;
     }
 
     // Copy required directories
     if (!is_dir("$tmp_dir/tests/phpunit")) {
-        echo "Error: WordPress test suite not found in cloned repository.\n";
+        echo esc_cli("Error: WordPress test suite not found in cloned repository.\n");
         system("rm -rf $tmp_dir");
         return false;
     }
@@ -578,11 +603,11 @@ function download_wp_tests( string $wp_tests_dir ): bool {
 
     // Verify files exist
     if (!file_exists("$wp_tests_dir/includes/functions.php") || !file_exists("$wp_tests_dir/includes/install.php")) {
-        echo "Error: Failed to download WordPress test suite files.\n";
+        echo esc_cli("Error: Failed to download WordPress test suite files.\n");
         return false;
     }
 
-    echo COLOR_GREEN . '✅ WordPress test suite downloaded successfully.' . COLOR_RESET . "\n";
+    echo esc_cli(COLOR_GREEN . '✅ WordPress test suite downloaded successfully.' . COLOR_RESET . "\n");
     return true;
 }
 

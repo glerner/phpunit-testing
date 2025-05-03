@@ -2,12 +2,12 @@
 /**
  * Tests for the WP_Mock_Test_Case class.
  *
- * @package GL\Testing\Framework\Tests
+ * @package WP_PHPUnit_Framework\Tests
  */
 
-namespace GL\Testing\Framework\Tests\WP_Mock;
+namespace WP_PHPUnit_Framework\Tests\WP_Mock;
 
-use GL\Testing\Framework\WP_Mock\WP_Mock_Test_Case;
+use WP_PHPUnit_Framework\WP_Mock\WP_Mock_Test_Case;
 use WP_Mock;
 use PHPUnit\Framework\TestCase;
 
@@ -33,8 +33,9 @@ class Test_WP_Mock_Test_Case extends TestCase {
 			)
 		);
 
-		// Call the mocked function
-		$result = wp_kses_post('<p>Test</p>');
+		// Call the mocked function - use global namespace to avoid IDE errors
+		// phpcs:ignore WordPress.WP.AlternativeFunctions, Universal.NamingConventions.NoReservedKeywordParameterNames
+		$result = \wp_kses_post('<p>Test</p>');
 
 		// Verify the mock works
 		$this->assertEquals('<p>Test</p>', $result);

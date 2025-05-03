@@ -2,14 +2,14 @@
 /**
  * Integration Test Case base class
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage Integration
  * @codeCoverageIgnore
  */
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Integration;
+namespace WP_PHPUnit_Framework\Integration;
 
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 
@@ -17,6 +17,9 @@ use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 if (!class_exists('WP_UnitTestCase')) {
 	// For development and static analysis
 	require_once dirname(__DIR__) . '/Stubs/WP_UnitTestCase.php';
+
+	// Add a phpcs suppression for the undefined WordPress function
+	// phpcs:disable WordPress.WP.AlternativeFunctions
 }
 
 /**

@@ -3,28 +3,38 @@
  * Example Integration Test
  *
  * This is a template for an integration test that demonstrates how to use
- * the GL WordPress Testing Framework for testing code that interacts
+ * the WP PHPUnit Framework for testing code that interacts
  * with a real WordPress environment.
  *
  * NOTE: This is a template file and will show IDE errors since the referenced
  * classes don't exist. You should copy this file to your plugin's test directory
  * and modify it to match your plugin's structure before using it.
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage Examples
  */
 
 declare(strict_types=1);
 
-namespace YourPlugin\Tests\Integration;
+// This PHPCS comment disables the namespace prefix check for this example file.
+// You should remove this comment once you've replaced the namespaces with your own.
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
 
-use GL\Testing\Framework\Integration\Integration_Test_Case;
-use YourPlugin\Plugin_Class;
+// IMPORTANT: When copying this template to your plugin:
+// 1. Replace 'YourPlugin' with your plugin's namespace (e.g., 'My_Plugin')
+// 2. Replace 'Plugin_Class' with your actual class name to test
+// 3. The recommended structure is: YourPluginName\Tests\Integration\Classes
+
+namespace YourPlugin\Tests\Integration\Classes;
+
+// Import the base test case from the WP_PHPUnit_Framework
+use WP_PHPUnit_Framework\Integration\Integration_Test_Case;
+use YourPlugin\Classes\Plugin_Class;
 
 /**
  * Example Integration Test class
  *
- * @covers \YourPlugin\Plugin_Class
+ * @covers \YourPlugin\Classes\Plugin_Class
  */
 class Example_Integration_Test extends Integration_Test_Case {
 	/**
@@ -149,12 +159,16 @@ class Example_Integration_Test extends Integration_Test_Case {
 		$this->assertTrue($result);
 
 		// Retrieve the record directly from the database
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$query = $wpdb->prepare(
 			"SELECT * FROM {$table_name} WHERE name = %s",
 			$data['name']
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared
 		$record = $wpdb->get_row($query);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
 		// Verify the record data
 		$this->assertNotNull($record);

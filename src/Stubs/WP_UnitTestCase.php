@@ -6,13 +6,13 @@
  * for static analysis and development. When the framework is used in a WordPress
  * environment, the real WP_UnitTestCase class from WordPress will be used instead.
  *
- * @package GL\Testing\Framework\Stubs
+ * @package WP_PHPUnit_Framework\Stubs
  * @codeCoverageIgnore
  */
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Stubs;
+namespace WP_PHPUnit_Framework\Stubs;
 
 use PHPUnit\Framework\TestCase;
 

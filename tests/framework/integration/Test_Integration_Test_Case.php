@@ -2,12 +2,12 @@
 /**
  * Tests for the Integration_Test_Case class.
  *
- * @package GL\Testing\Framework\Tests
+ * @package WP_PHPUnit_Framework\Tests
  */
 
-namespace GL\Testing\Framework\Tests\Integration;
+namespace WP_PHPUnit_Framework\Tests\Integration;
 
-use GL\Testing\Framework\Integration\Integration_Test_Case;
+use WP_PHPUnit_Framework\Integration\Integration_Test_Case;
 use PHPUnit\Framework\TestCase;
 
 /**

@@ -4,30 +4,9 @@ This document provides detailed information about using PHP_CodeSniffer (PHPCS) 
 
 ## Basic Usage
 
-### PHPCS (PHP_CodeSniffer)
-
-PHPCS detects violations of coding standards in your PHP code:
-
-```bash
-# Basic usage, check PHP files in your project (excludes vendor/, .git/, and other paths in .gitignore)
-composer run-script phpcs
-
-# Check a specific file
-composer run-script phpcs -- path/to/file.php
-
-# Show sniff codes (helpful for identifying specific rules)
-composer run-script phpcs -- -s
-
-# Generate a summary report
-composer run-script phpcs -- --report=summary
-
-# Generate documentation of all rules
-composer run-script phpcs -- -s --generator=markdown > docs/analysis/phpcs-rules-described.md
-```
-
 ### PHPCBF (PHP Code Beautifier and Fixer)
 
-PHPCBF automatically fixes many of the issues detected by PHPCS, so often will run it before PHPCS:
+PHPCBF automatically fixes many of the issues detected by PHPCS, so often you will run it before PHPCS:
 
 ```bash
 # Basic usage, beautify/fix PHP files in your project (excludes vendor/, .git/, and other paths in .gitignore)
@@ -41,6 +20,28 @@ composer run-script phpcbf -- -v
 
 # List installed standards
 composer run-script phpcbf -- -i
+```
+
+### PHPCS (PHP_CodeSniffer)
+
+PHPCS detects violations of coding standards in your PHP code:
+
+```bash
+# Basic usage, check PHP files in your project (excludes vendor/, .git/, and other paths in .gitignore)
+composer run-script phpcs
+
+# Check a specific file
+composer run-script phpcs -- path/to/file.php
+
+# Show sniff codes, the line number and error rule found.
+# This is the most useful command for showing errors that can't be fixed automatically by PHPCBF
+composer run-script phpcs -- -s
+
+# Generate a summary report
+composer run-script phpcs -- --report=summary
+
+# Generate documentation of all rules
+composer run-script phpcs -- -s --generator=markdown > docs/analysis/phpcs-rules-described.md
 ```
 
 ## Configuration for Both PHPCS and PHPCBF
@@ -223,12 +224,247 @@ These were systematically identified by running PHPCBF with different exclusions
    ```
    The `-s` parameter shows the sniff codes for each violation, making it easier to identify which rules to exclude. Focus on fixing the most common or problematic issues manually.
 
-6. **Manually Fix Critical Issues**: 
+6. **Manually Fix Critical Issues**:
    PHPCBF will indicate issues it can't fix in several ways:
    - When you see "FAILED TO FIX" messages for specific files - PHPCBF doesn't show which specific issues it couldn't fix, so run `composer run-script phpcs -- -s path/to/file.php` afterward to see the remaining issues with their sniff codes
    - When PHPCBF reports "ERROR" with "made 50 passes" (hit the maximum iteration limit) - try excluding problematic rules as described in the "Identifying Rules to Exclude" section above
-   
+
    For these cases, you'll need to manually edit the files. The most common unfixable issues involve complex nested structures, multi-line function calls, or conflicting rule requirements.
+
+## Common PHPCS Errors and How to Fix Them
+
+Here are some of the most common PHPCS errors you'll encounter and practical ways to fix them:
+
+### 1. WordPress.NamingConventions.PrefixAllGlobals
+
+This rule requires all global variables, functions, and constants in a WordPress plugin to have a plugin-specific prefix.
+
+**Before:**
+```php
+// Global variables without prefix
+$env_file = dirname(__DIR__) . '/.env.testing';
+$framework_source = getenv('FRAMEWORK_SOURCE') ?: dirname(__DIR__);
+```
+
+**Option 1 - After (with prefixes):**
+```php
+// Global variables with prefix
+$wp_phpunit_env_file = dirname(__DIR__) . '/.env.testing';
+$wp_phpunit_framework_source = getenv('FRAMEWORK_SOURCE') ?: dirname(__DIR__);
+```
+
+**Better Option 2 - After (with namespace):**
+```php
+namespace WP_PHPUnit_Framework\Bin;
+
+// Variables now scoped to namespace, no prefix needed
+$env_file = dirname(__DIR__) . '/.env.testing';
+$framework_source = getenv('FRAMEWORK_SOURCE') ?: dirname(__DIR__);
+```
+
+### 2. Universal.Operators.DisallowShortTernary
+
+Short ternary operators (`?:`) can be confusing and lead to bugs.
+
+**Before:**
+```php
+$framework_source = getenv('FRAMEWORK_SOURCE') ?: dirname(__DIR__);
+$db_name = getenv('WP_TESTS_DB_NAME') ?: 'wordpress_test';
+```
+
+**After:**
+```php
+$framework_source = getenv('FRAMEWORK_SOURCE') ? getenv('FRAMEWORK_SOURCE') : dirname(__DIR__);
+$db_name = getenv('WP_TESTS_DB_NAME') ? getenv('WP_TESTS_DB_NAME') : 'wordpress_test';
+```
+
+### 3. WordPress.Security.EscapeOutput
+
+All output in WordPress should be escaped to prevent potential security issues.
+
+**Before:**
+```php
+echo "Framework source: $framework_source\n";
+echo "WordPress root: $filesystem_wp_root\n";
+```
+
+**Option 1 - After (for WordPress plugins):**
+```php
+echo esc_html("Framework source: $framework_source\n");
+echo esc_html("WordPress root: $filesystem_wp_root\n");
+```
+
+**Option 2 - After (for CLI scripts):**
+```php
+// Define a simple escaping function for CLI output
+function esc_cli($text) {
+    return $text; // For CLI, we might not need actual escaping
+}
+
+echo esc_cli("Framework source: $framework_source\n");
+echo esc_cli("WordPress root: $filesystem_wp_root\n");
+```
+
+### 4. Squiz.Commenting.FileComment.MissingPackageTag
+
+PHP files should have a proper file comment block with a @package tag.
+
+**Before:**
+```php
+/**
+ * Sync PHPUnit Testing Framework to WordPress
+ *
+ * This script syncs the PHPUnit Testing Framework to a WordPress plugin directory
+ * and sets up the testing environment.
+ *
+ * Usage: php bin/sync-to-wp.php
+ */
+```
+
+**After:**
+```php
+/**
+ * Sync PHPUnit Testing Framework to WordPress
+ *
+ * This script syncs the PHPUnit Testing Framework to a WordPress plugin directory
+ * and sets up the testing environment.
+ *
+ * Usage: php bin/sync-to-wp.php
+ *
+ * @package WP_PHPUnit_Framework
+ */
+```
+
+### 5. WordPress.DB.PreparedSQL
+
+Direct SQL queries should use $wpdb->prepare() to prevent SQL injection.
+
+**Before:**
+```php
+$table_name = $wpdb->prefix . 'my_table';
+$name = 'test_value';
+$results = $wpdb->get_results("SELECT * FROM {$table_name} WHERE name = '$name'");
+```
+
+**After:**
+```php
+$table_name = $wpdb->prefix . 'my_table';
+$name = 'test_value';
+$results = $wpdb->get_results(
+    $wpdb->prepare(
+        "SELECT * FROM {$table_name} WHERE name = %s",
+        $name
+    )
+);
+```
+
+### 6. WordPress.PHP.IniSet
+
+Using ini_set() for certain PHP settings is discouraged in WordPress. For display_errors, use WP_DEBUG_DISPLAY instead.
+
+**Before:**
+```php
+// Directly setting PHP configuration
+ini_set('display_errors', '1');
+```
+
+**After:**
+```php
+// Use WordPress constants instead
+define('WP_DEBUG', true);
+define('WP_DEBUG_DISPLAY', true);
+```
+
+### 7. PSR1.Methods.CamelCapsMethodName
+
+This rule enforces camelCase method names, which conflicts with WordPress's snake_case convention. Our configuration prioritizes WordPress standards, but it's good to understand both.
+
+**WordPress Style (Preferred in this project):**
+```php
+class Example_Test_Case extends \PHPUnit\Framework\TestCase {
+    public function test_specific_functionality() {
+        // Test code here
+    }
+
+    public function set_up_before_class() {
+        // Setup code
+    }
+}
+```
+
+**PSR-1 Style:**
+```php
+class ExampleTestCase extends \PHPUnit\Framework\TestCase {
+    public function testSpecificFunctionality() {
+        // Test code here
+    }
+
+    public function setUpBeforeClass() {
+        // Setup code
+    }
+}
+```
+
+### 8. Squiz.Commenting.FunctionComment
+
+Function documentation should follow proper PHPDoc standards.
+
+**Before (Incomplete DocBlock):**
+```php
+/**
+ * Process data and return results
+ */
+public function process_data($input) {
+    if (!$input) {
+        throw new \InvalidArgumentException('Input cannot be empty');
+    }
+    return $input * 2;
+}
+```
+
+**After (Complete DocBlock):**
+```php
+/**
+ * Process data and return results
+ *
+ * @param int $input The input value to process
+ * @return int The processed result
+ * @throws \InvalidArgumentException When input is empty
+ */
+public function process_data($input) {
+    if (!$input) {
+        throw new \InvalidArgumentException('Input cannot be empty');
+    }
+    return $input * 2;
+}
+```
+
+### 9. WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+
+Global constants should be prefixed with your plugin's prefix.
+
+**Before:**
+```php
+define('COLOR_RED', "\033[31m");
+define('COLOR_GREEN', "\033[32m");
+define('COLOR_RESET', "\033[0m");
+```
+
+**After:**
+```php
+define('WP_PHPUNIT_COLOR_RED', "\033[31m");
+define('WP_PHPUNIT_COLOR_GREEN', "\033[32m");
+define('WP_PHPUNIT_COLOR_RESET', "\033[0m");
+```
+
+**Better Alternative (Using a Namespace):**
+```php
+namespace WP_PHPUnit_Framework\Constants;
+
+const COLOR_RED = "\033[31m";
+const COLOR_GREEN = "\033[32m";
+const COLOR_RESET = "\033[0m";
+```
 
 ### Indentation Issues (Whether to Use Tabs or Spaces)
 
@@ -262,6 +498,39 @@ You can temporarily exclude specific sniffs on the command line:
 composer run-script phpcs -- --exclude=Squiz.Commenting.InlineComment
 ```
 Multiple rules should be separated by commas with no spaces between them. Remember that on the command line, you can only use the 3-part format (`Standard.Category.Sniff`).
+
+### Using PHPCS Directives for CLI Scripts
+
+For CLI scripts that don't directly interact with WordPress functions, you can use inline PHPCS directives to apply different standards or disable specific rules. This is particularly useful for scripts in the `bin/` directory.
+
+**Example (at the top of a CLI script):**
+```php
+<?php
+/**
+ * @package WP_PHPUnit_Framework
+ */
+
+// phpcs:set WordPress.Security.EscapeOutput customEscapingFunctions[] esc_cli
+// phpcs:disable WordPress.WP.AlternativeFunctions
+// phpcs:disable WordPress.DB.RestrictedFunctions
+
+declare(strict_types=1);
+
+namespace WP_PHPUnit_Framework\Bin;
+```
+
+This approach:
+
+1. Registers `esc_cli()` as a valid escaping function for CLI output
+2. Disables warnings about using PHP native functions instead of WordPress alternatives
+3. Disables restrictions on direct database queries (for CLI tools only)
+
+You can also selectively ignore specific rules for individual lines:
+
+```php
+// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+echo "This output won't trigger PHPCS warnings";
+```
 
 ### Creating a Baseline
 

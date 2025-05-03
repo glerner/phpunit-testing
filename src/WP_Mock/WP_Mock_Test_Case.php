@@ -2,16 +2,16 @@
 /**
  * Base Test Case for WordPress Mock Tests
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage WP_Mock
  * @codeCoverageIgnore
  */
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\WP_Mock;
+namespace WP_PHPUnit_Framework\WP_Mock;
 
-use GL\Testing\Framework\Unit\Unit_Test_Case;
+use WP_PHPUnit_Framework\Unit\Unit_Test_Case;
 use WP_Mock;
 use Mockery;
 

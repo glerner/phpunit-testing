@@ -16,7 +16,7 @@ This guide provides step-by-step instructions for installing PHPUnit and related
 
 Before installing the testing tools, ensure you have:
 
-- PHP 7.4 or higher (for WordPress, should use PHP 8.0+)
+- PHP 8.0 or higher (for WordPress, should use PHP 8.0+)
 - Composer installed and available in your path
 - Git (for cloning repositories)
 - MySQL/MariaDB (for integration tests)
@@ -29,7 +29,7 @@ PHPUnit is the core testing framework we'll use. We recommend installing it via 
 
 ```bash
 # use your actual location
-cd ~/sites/wordpress/wp-content/plugins/gl-phpunit-testing-framework
+cd ~/sites/wordpress/wp-content/plugins/your-project
 
 # Add PHPUnit as a dev dependency
 composer require --dev phpunit/phpunit ^9.0
@@ -415,3 +415,47 @@ For more detailed information on using these testing tools, refer to:
 - [PHPUnit Testing Tutorial](phpunit-testing-tutorial.md)
 - [Mocking Strategies](phpunit-testing-tutorial.md#mocking-strategies)
 - [Determining the Right Test Type](phpunit-testing-tutorial.md#determining-the-right-test-type)
+- [PHPCS & PHPCBF Guide](../tools/PHPCS-PHPCBF-Guide.md)
+
+## Customizing PHPCS Configuration
+
+This framework includes a `phpcs.xml.dist` file with default configurations for WordPress coding standards. The file includes prefix settings with placeholder values that you'll need to customize for your project:
+
+```xml
+<!-- Set prefixes for checking naming conventions - CUSTOMIZE THESE FOR YOUR PROJECT -->
+<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+    <properties>
+        <property name="prefixes" type="array">
+            <element value="Your_Plugin"/><!-- For constants and class names -->
+            <element value="your_plugin"/><!-- For functions and global variables -->
+            <element value="Your_Plugin\\"/><!-- For namespaces -->
+        </property>
+    </properties>
+</rule>
+```
+
+### Understanding the Three Prefix Values
+
+WordPress coding standards require three different prefix formats for different code elements:
+
+1. **PascalCase with underscores** (e.g., `Your_Plugin`):
+   - Used for class names: `class Your_Plugin_Admin {}`
+   - Used for constants: `define('YOUR_PLUGIN_VERSION', '1.0.0');`
+
+2. **Lowercase with underscores** (e.g., `your_plugin`):
+   - Used for functions: `function your_plugin_init() {}`
+   - Used for global variables: `global $your_plugin_settings;`
+
+3. **Namespace format** (e.g., `Your_Plugin\`):
+   - Used for PHP namespaces: `namespace Your_Plugin\Admin;`
+   - Note the double backslash in the XML configuration (escaping)
+
+### Setting Up Your Configuration
+
+If you're using this framework in your own plugin or theme, you should:
+
+1. Copy `phpcs.xml.dist` to `phpcs.xml` (which is gitignored)
+2. Update the prefixes to match your plugin's naming convention
+3. Adjust any other rules to match your project's coding standards
+
+This ensures that PHPCS will correctly identify unprefixed functions, variables, and namespaces in your code.

@@ -3,28 +3,37 @@
  * Example Unit Test
  *
  * This is a template for a basic unit test that demonstrates how to use
- * the GL WordPress Testing Framework for isolated unit testing.
+ * the WP PHPUnit Framework for isolated unit testing.
  *
  * NOTE: This is a template file and will show IDE errors since the referenced
  * classes don't exist. You should copy this file to your plugin's test directory
  * and modify it to match your plugin's structure before using it.
  *
- * @package GL_WordPress_Testing_Framework
+ * @package WP_PHPUnit_Framework
  * @subpackage Examples
  */
 
 declare(strict_types=1);
 
-namespace YourPlugin\Tests\Unit;
+// This PHPCS comment disables the namespace prefix check for this example file.
+// You should remove this comment once you've replaced the namespaces with your own.
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
 
-use GL\Testing\Framework\Unit\Unit_Test_Case;
-use YourPlugin\Example_Class;
+// IMPORTANT: When copying this template to your plugin:
+// 1. Replace 'YourPlugin' with your plugin's namespace (e.g., 'My_Plugin')
+// 2. Replace 'Example_Class' with your actual class name to test
+// 3. The recommended structure is: YourPluginName\Tests\Unit\Classes
+namespace YourPlugin\Tests\Unit\Classes;
+
+// Import the base test case from the WP_PHPUnit_Framework
+use WP_PHPUnit_Framework\Unit\Unit_Test_Case;
+use YourPlugin\Classes\Example_Class;
 use Mockery;
 
 /**
  * Example Unit Test class
  *
- * @covers \YourPlugin\Example_Class
+ * @covers \YourPlugin\Classes\Example_Class
  */
 class Example_Unit_Test extends Unit_Test_Case {
 	/**
@@ -127,3 +136,4 @@ class Example_Unit_Test extends Unit_Test_Case {
 		$this->assertSame($expected, $result);
 	}
 }
+// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound

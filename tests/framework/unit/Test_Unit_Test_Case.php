@@ -2,12 +2,12 @@
 /**
  * Tests for the Unit_Test_Case class.
  *
- * @package GL\Testing\Framework\Tests
+ * @package WP_PHPUnit_Framework\Tests
  */
 
-namespace GL\Testing\Framework\Tests\Unit;
+namespace WP_PHPUnit_Framework\Tests\Unit;
 
-use GL\Testing\Framework\Unit\Unit_Test_Case;
+use WP_PHPUnit_Framework\Unit\Unit_Test_Case;
 use Mockery;
 use PHPUnit\Framework\TestCase;
 

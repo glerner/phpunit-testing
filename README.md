@@ -64,6 +64,7 @@ Rather than using a single configuration with conditional logic and environment 
 
 - [Installation Guide](docs/guides/installation-guide.md) - Step-by-step instructions for installing and configuring the framework
 - [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md) - Comprehensive guide to writing tests
+- [PHPCS & PHPCBF Guide](docs/tools/PHPCS-PHPCBF-Guide.md) - How to use code quality tools effectively
 - [Troubleshooting Guide](docs/guides/troubleshooting-guide.md) - Solutions for common issues and challenges
 - [Git and GitHub Setup Guide](docs/git-github-setup-guide.md) - How to set up Git repositories for your projects
 - [Technology Choices](docs/technology-choices.md) - Explanation of technology decisions for this project
@@ -105,7 +106,7 @@ Basic usage example:
 
 ```php
 // In your test file
-use GL\Testing\Framework\Unit\Unit_Test_Case;
+use WP_PHPUnit_Framework\Unit\Unit_Test_Case;
 
 class Test_My_Class extends Unit_Test_Case {
     public function test_something() {
