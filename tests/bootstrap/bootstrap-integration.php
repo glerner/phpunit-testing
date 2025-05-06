@@ -15,7 +15,7 @@
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Bootstrap;
+namespace WP_PHPUnit_Framework\Bootstrap;
 
 // Define WordPress test environment constants if not already defined
 if (!defined('WP_TESTS_MULTISITE')) {
@@ -29,7 +29,8 @@ if (!defined('WP_TESTS_FORCE_KNOWN_BUGS')) {
 // Attempt to locate WordPress test library
 echo "Locating WordPress test library\n";
 
-$wp_tests_dir = getenv('WP_TESTS_DIR');
+// Use get_setting function from bootstrap.php to get WP_TESTS_DIR
+$wp_tests_dir = get_setting('WP_TESTS_DIR');
 
 // Try to find the WordPress test library in common locations
 if (!$wp_tests_dir) {
@@ -42,8 +43,6 @@ if (!$wp_tests_dir) {
 	    '/tmp/wordpress-tests-lib',
 	    '/var/www/wordpress-develop/tests/phpunit',
 	    '/wordpress-develop/tests/phpunit',
-	    // Allow custom path via environment variable
-	    getenv('WP_DEVELOP_DIR') . '/tests/phpunit',
 	];
 
 	foreach ($possible_locations as $location) {

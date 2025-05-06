@@ -79,9 +79,9 @@ phpunit-testing/                # The framework repository
 │       └── Integration_Test_Case.php
 ├── config/                     # Configuration templates
 │   ├── phpunit/
-│   │   ├── phpunit.xml.dist
-│   │   ├── phpunit-integration.xml.dist
-│   │   └── phpunit-wp-mock.xml.dist
+│   │   ├── phpunit-unit.xml.dist
+│   │   ├── phpunit-wp-mock.xml.dist
+│   │   └── phpunit-integration.xml.dist
 │   ├── phpstan/
 │   └── phpcs/
 ├── templates/                  # Template files for test creation
@@ -150,7 +150,7 @@ The framework provides base test classes for each test type to ensure consistent
 ### Unit Test Case
 
 ```php
-namespace GL\Testing\Framework\Unit;
+namespace WP_PHPUnit_Framework\Unit;
 
 class Unit_Test_Case extends \PHPUnit\Framework\TestCase {
     protected function setUp(): void {
@@ -168,7 +168,7 @@ class Unit_Test_Case extends \PHPUnit\Framework\TestCase {
 ### WP-Mock Test Case
 
 ```php
-namespace GL\Testing\Framework\WP_Mock;
+namespace WP_PHPUnit_Framework\WP_Mock;
 
 class WP_Mock_Test_Case extends \PHPUnit\Framework\TestCase {
     protected function setUp(): void {
@@ -186,7 +186,7 @@ class WP_Mock_Test_Case extends \PHPUnit\Framework\TestCase {
 ### Integration Test Case
 
 ```php
-namespace GL\Testing\Framework\Integration;
+namespace WP_PHPUnit_Framework\Integration;
 
 class Integration_Test_Case extends \PHPUnit\Framework\TestCase {
     protected function setUp(): void {
@@ -241,9 +241,9 @@ Namespaces should reflect your directory structure:
 ### Framework Namespaces
 
 ```php
-namespace GL\Testing\Framework\Unit;
-namespace GL\Testing\Framework\WP_Mock;
-namespace GL\Testing\Framework\Integration;
+namespace WP_PHPUnit_Framework\Unit;
+namespace WP_PHPUnit_Framework\WP_Mock;
+namespace WP_PHPUnit_Framework\Integration;
 ```
 
 ### Plugin Test Namespaces
@@ -585,143 +585,264 @@ services:
 
 With this configuration, the `WP_ROOT` environment variable will be automatically available inside the Lando container, eliminating the need to specify it in each test command.
 
-### Using Test Shell Script
+### Running Tests
 
-The framework includes a shell script (`bin/test.sh`) that simplifies running tests with various options. The typical workflow involves:
+> **IMPORTANT**: Tests must be run from within the WordPress environment (~/sites/wordpress/wp-content/plugins/your-plugin/). Only code quality tools like PHPCS or PHPStan can be run directly from your plugin development directory.
 
-1. WP_ROOT is set in the environment
-2. `php bin/sync-to-wp.php` - Syncs your plugin code to the WordPress installation
-3. `./bin/test.sh` - Runs tests with specified options. Use either the Lando version or else directly from your  plugin directory
+#### Using the Sync-and-Test Script
+
+For users who prefer a simpler approach, the framework includes a `sync-and-test.php` script that combines syncing your plugin to WordPress and running tests in a single command. This is the recommended approach for most users.
+
+```bash
+# From your plugin development directory
+cd ~/sites/your-plugin/
+
+# Run the sync-and-test.php script with the desired test type
+php bin/sync-and-test.php --unit
+```
+
+The script handles all three steps automatically:
+1. Syncs your plugin to WordPress (using the existing sync-to-wp.php script)
+2. Changes to the WordPress plugin directory
+3. Runs the appropriate tests
+
+##### Available Options
+
+```
+--help          Show help message
+--unit          Run unit tests (tests that don't require WordPress functions)
+--wp-mock       Run WP Mock tests (tests that mock WordPress functions)
+--integration   Run integration tests (tests that require a WordPress database)
+--all           Run all test types
+--coverage      Generate code coverage report in build/coverage directory
+--verbose       Show verbose output
+--file=<file>   Run a specific test file instead of the entire test suite
+```
+
+##### Examples
+
+```bash
+# Run unit tests
+php bin/sync-and-test.php --unit
+
+# Run WP Mock tests with a specific file
+php bin/sync-and-test.php --wp-mock --file=tests/wp-mock/specific-test.php
+
+# Run integration tests with code coverage
+php bin/sync-and-test.php --integration --coverage
+
+# Run all tests with verbose output
+php bin/sync-and-test.php --all --verbose
+```
+
+#### Running Tests with Composer and Lando
+
+For more advanced users, the framework also provides Composer scripts and Lando commands that simplify running tests. The typical workflow involves:
+
+1. `php bin/sync-to-wp.php` - Syncs your plugin code to the WordPress installation
+2. Navigate to your plugin directory **inside the WordPress installation**
+3. Run tests using Composer or Lando commands
 
 #### Mock Tests (using WP_Mock)
 
-```bash
-# Run all WP-Mock tests
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --mock"
-# Or directly from plugin directory:
-./bin/test.sh --mock
+For all examples below, first sync your plugin and navigate to the WordPress plugin directory:
 
-# Run a specific WP-Mock test file
+```bash
+# Step 1: From your plugin development directory, sync to WordPress
 cd ~/sites/your-plugin/
 php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --mock --file tests/wp-mock/specific-test.php"
-# Or directly from plugin directory:
-./bin/test.sh --mock --file tests/wp-mock/specific-test.php
+
+# Step 2: Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+```
+
+Then run the tests:
+
+```bash
+# Run all WP-Mock tests using Composer
+composer test:wp-mock
+
+# Or using Lando
+lando test:wp-mock
+
+# Run a specific WP-Mock test file using PHPUnit directly
+vendor/bin/phpunit -c config/phpunit-wp-mock.xml.dist tests/wp-mock/specific-test.php
+
+# Or using Lando
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit -c config/phpunit-wp-mock.xml.dist tests/wp-mock/specific-test.php"
 ```
 
 #### Unit Tests
 
+For all examples below, first sync your plugin and navigate to the WordPress plugin directory:
+
 ```bash
-# Run all unit tests
+# Step 1: From your plugin development directory, sync to WordPress
 cd ~/sites/your-plugin/
 php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --unit"
-# Or directly from plugin directory:
-./bin/test.sh --unit
 
-# Run unit tests with code coverage
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --unit --coverage"
-# Or directly from plugin directory:
-./bin/test.sh --unit --coverage
+# Step 2: Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+```
 
-# Run unit tests with debug output
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && PHP_ERROR_REPORTING=E_ALL WP_ROOT=/app ./bin/test.sh --unit"
-# Or directly from plugin directory:
-PHP_ERROR_REPORTING=E_ALL ./bin/test.sh --unit
+Then run the tests:
+
+```bash
+# Run all unit tests using Composer
+composer test:unit
+
+# Or using Lando
+lando test:unit
+
+# Generate code coverage report
+lando test:coverage
+
+# Or using Composer directly with PHPUnit
+# This creates HTML coverage reports in the build/coverage directory
+# You can view these reports by opening build/coverage/index.html in a browser
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist --coverage-html build/coverage
+
+# Run tests with debug output
+PHP_ERROR_REPORTING=E_ALL composer test:unit
+
+# Or using Lando with environment variables
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && PHP_ERROR_REPORTING=E_ALL composer test:unit"
 
 # Run a specific unit test file
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && PHP_ERROR_REPORTING=E_ALL WP_ROOT=/app ./bin/test.sh --unit --file tests/unit/specific-test.php"
-# Or directly from plugin directory:
-PHP_ERROR_REPORTING=E_ALL ./bin/test.sh --unit --file tests/unit/specific-test.php
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist tests/unit/specific-test.php
+
+# Or using Lando
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit -c config/phpunit-unit.xml.dist tests/unit/specific-test.php"
 ```
 
 #### Integration Tests
 
+For all examples below, first sync your plugin and navigate to the WordPress plugin directory:
+
 ```bash
-# Run all integration tests
+# Step 1: From your plugin development directory, sync to WordPress
 cd ~/sites/your-plugin/
 php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --integration"
-# Or directly from plugin directory:
-./bin/test.sh --integration
+
+# Step 2: Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+```
+
+Then run the tests:
+
+```bash
+# Run all integration tests using Composer
+composer test:integration
+
+# Or using Lando
+lando test:integration
 
 # Run integration tests with API keys
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && OPENAI_API_KEY=your_key WP_ROOT=/app ./bin/test.sh --integration"
-# Or directly from plugin directory:
-OPENAI_API_KEY=your_key ./bin/test.sh --integration
+OPENAI_API_KEY=your_key composer test:integration
+
+# Or using Lando with environment variables
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && OPENAI_API_KEY=your_key composer test:integration"
 ```
 
 #### All Tests
 
-```bash
-# Run all test types
-cd ~/sites/your-plugin/
-php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh"
-# Or directly from plugin directory:
-./bin/test.sh
+For all examples below, first sync your plugin and navigate to the WordPress plugin directory:
 
-# Run all tests with verbose output
+```bash
+# Step 1: From your plugin development directory, sync to WordPress
 cd ~/sites/your-plugin/
 php bin/sync-to-wp.php
-cd ~/sites/wordpress
-lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh" --verbose
-# Or directly from plugin directory:
-./bin/test.sh --verbose
+
+# Step 2: Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+```
+
+Then run the tests:
+
+```bash
+# Run all tests using Composer
+composer test
+
+# Or using Lando (run each test type separately)
+lando test:unit && lando test:wp-mock && lando test:integration
+
+# Run tests with verbose output (run each test type separately)
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist --verbose
+vendor/bin/phpunit -c config/phpunit-wp-mock.xml.dist --verbose
+vendor/bin/phpunit -c config/phpunit-integration.xml.dist --verbose
+
+# Or using Lando with verbose flag (run each test type separately)
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit -c config/phpunit-unit.xml.dist --verbose"
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit -c config/phpunit-wp-mock.xml.dist --verbose"
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit -c config/phpunit-integration.xml.dist --verbose"
 ```
 
 #### Running Specific Test Directories
 
+For all examples below, first sync your plugin and navigate to the WordPress plugin directory:
+
 ```bash
-# Run tests in a specific directory
+# Step 1: From your plugin development directory, sync to WordPress
 cd ~/sites/your-plugin/
 php bin/sync-to-wp.php
-cd ~/sites/wordpress/wp-content/plugins/your-plugin
-lando ssh -c "vendor/bin/phpunit tests/specific-directory"
-# Or directly from plugin directory:
+
+# Step 2: Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+```
+
+Then run the tests:
+
+```bash
+# Run tests in a specific directory using PHPUnit directly
 vendor/bin/phpunit tests/specific-directory
+
+# Or using Lando
+lando ssh -c "cd /app/wp-content/plugins/your-plugin && vendor/bin/phpunit tests/specific-directory"
 ```
 
 > **Tip**: For efficiency, you can combine the commands with ` && ` to run them as a single line:
 > ```bash
-> cd ~/sites/your-plugin/ && php bin/sync-to-wp.php && cd ~/sites/wordpress && lando ssh -c "cd /app/wp-content/plugins/your-plugin && WP_ROOT=/app ./bin/test.sh --unit"
+> cd ~/sites/your-plugin/ && php bin/sync-to-wp.php && cd ~/sites/wordpress/wp-content/plugins/your-plugin/ && composer test:unit
+> ```
+> Or with Lando:
+> ```bash
+> cd ~/sites/your-plugin/ && php bin/sync-to-wp.php && cd ~/sites/wordpress/wp-content/plugins/your-plugin/ && lando test:unit
 > ```
 
-### Test Script Options
+### Available Test Commands
 
-The `bin/test.sh` script supports several options to control which tests to run and how to run them:
+The framework provides several Composer scripts and Lando commands to run different types of tests:
+
+#### Composer Commands
 
 ```
-Usage: ./bin/test.sh [options] [--file FILE]
-
-Options:
-  --help          Show help message
-  --unit          Run unit tests (tests that don't require WordPress functions)
-  --mock          Run WP Mock tests (tests that mock WordPress functions)
-  --integration   Run integration tests (tests that require a WordPress database)
-  --coverage      Generate code coverage report in build/coverage directory
-  --file FILE     Run a specific test file instead of the entire test suite
+composer test              # Run all tests
+composer test:unit         # Run unit tests (tests that don't require WordPress functions)
+composer test:wp-mock      # Run WP Mock tests (tests that mock WordPress functions)
+composer test:integration  # Run integration tests (tests that require a WordPress database)
 ```
 
-Each option corresponds to a specific test type and automatically selects the appropriate bootstrap file and test directory. For example, `--unit` will use the unit test bootstrap file and run tests in the `tests/unit` directory.
+#### Lando Commands
+
+```
+lando test:unit         # Run unit tests
+lando test:wp-mock      # Run WP_Mock tests
+lando test:mock         # Run mock tests
+lando test:integration  # Run integration tests
+lando test:coverage     # Generate code coverage report
+```
+
+Each command corresponds to a specific test type and automatically selects the appropriate bootstrap file and test directory. For example, `test:unit` will use the unit test bootstrap file and run tests in the `tests/unit` directory.
+
+#### PHPUnit Options
+
+For more advanced usage, you can run PHPUnit directly with additional options:
+
+```bash
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist --filter=testSpecificMethod
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist --group=feature
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist --coverage-html build/coverage
+```
 
 #### Future Enhancements
 

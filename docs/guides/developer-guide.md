@@ -45,10 +45,10 @@
 ```
 phpunit-testing/
 ├── config/                     # Configuration templates
-│   ├── phpunit.xml.dist        # Main PHPUnit configuration
-│   ├── phpunit-unit.xml.dist   # Unit test configuration
-│   ├── phpunit-wp-mock.xml.dist # WP_Mock test configuration
-│   └── phpunit-integration.xml.dist # Integration test configuration
+│   ├── phpunit-unit.xml.dist       # Unit test configuration
+│   ├── phpunit-wp-mock.xml.dist     # WP_Mock test configuration
+│   ├── phpunit-integration.xml.dist # Integration test configuration
+│   └── phpunit-framework-tests.xml.dist # Framework test configuration
 ├── docs/                       # Documentation
 │   ├── guides/
 │   │   ├── phpunit-testing-tutorial.md
@@ -81,19 +81,19 @@ phpunit-testing/
 The framework supports three types of tests:
 
 ### 1. Unit Tests
-- Extend `GL\Testing\Framework\Unit\Unit_Test_Case`
+- Extend `WP_PHPUnit_Framework\Unit\Unit_Test_Case`
 - Test isolated units of code without WordPress
 - Use Mockery for mocking dependencies
 - Fast and focused
 
 ### 2. WP_Mock Tests
-- Extend `GL\Testing\Framework\WP_Mock\WP_Mock_Test_Case`
+- Extend `WP_PHPUnit_Framework\WP_Mock\WP_Mock_Test_Case`
 - Test code that interacts with WordPress functions
 - Use WP_Mock and Brain\Monkey to mock WordPress functions
 - No WordPress installation required
 
 ### 3. Integration Tests
-- Extend `GL\Testing\Framework\Integration\Integration_Test_Case`
+- Extend `WP_PHPUnit_Framework\Integration\Integration_Test_Case`
 - Test code that requires a full WordPress environment
 - Test interactions with WordPress core, database, and hooks
 - Requires WordPress test library
@@ -182,11 +182,16 @@ Modify the test files to match your plugin's structure and functionality.
 ### 5. Run Tests
 
 ```bash
-# Run all tests
-vendor/bin/phpunit -c phpunit.xml.dist
+# Run all tests (each type separately)
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist && \
+vendor/bin/phpunit -c config/phpunit-wp-mock.xml.dist && \
+vendor/bin/phpunit -c config/phpunit-integration.xml.dist
+
+# Or use the composer script
+composer test
 
 # Run only unit tests
-vendor/bin/phpunit -c phpunit-unit.xml.dist
+vendor/bin/phpunit -c config/phpunit-unit.xml.dist
 
 # Run only WP_Mock tests
 vendor/bin/phpunit -c phpunit-wp-mock.xml.dist

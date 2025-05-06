@@ -14,7 +14,7 @@
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Bootstrap;
+namespace WP_PHPUnit_Framework\Bootstrap;
 
 // Initialize Mockery
 echo "Setting up Mockery for unit tests\n";

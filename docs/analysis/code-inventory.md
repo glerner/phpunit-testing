@@ -406,7 +406,7 @@ namespace WP_PHPUnit_Framework;
 function load_settings_file(): array
 ```
 
-**Purpose**: Loads environment variables from the `.env.testing` file in the project root directory.
+**Purpose**: Loads settings from the `.env.testing` file in the project root directory.
 
 **Parameters**: None
 
@@ -799,26 +799,42 @@ function display_help(): void
 
 ### `get_setting()`
 
-**Location**: `/bin/setup-plugin-tests.php`
+**Locations**:
+- `/bin/setup-plugin-tests.php`
+- `/tests/bootstrap/bootstrap.php`
 
 **Signature**:
 ```php
 namespace WP_PHPUnit_Framework;
 
-function get_setting(string $name, $default = null)
+function get_setting(string $name, mixed $default = null): mixed
 ```
 
-**Purpose**: Retrieves a setting from environment variables or loaded settings array.
+**Purpose**: Retrieves a setting from environment variables or loaded settings array, with environment variables taking precedence.
 
 **Parameters**:
 - `$name`: Name of the setting to retrieve
   - Type: string
   - Required: Yes
-  - Example: 'WP_TESTS_DB_HOST'
+  - Example: 'WP_TESTS_DIR'
 
 - `$default`: Default value if setting is not found
   - Type: mixed
   - Required: No
+
+**Behavior**:
+1. First checks environment variables (highest priority)
+2. Then checks settings loaded from .env.testing
+3. Finally falls back to the provided default value
+
+The function returns the first value it finds, following this priority order.
+
+**Usage in bootstrap-integration.php**:
+The bootstrap-integration.php file uses this function to get the WP_TESTS_DIR setting:
+```php
+$wp_tests_dir = get_setting('WP_TESTS_DIR');
+```
+This ensures that WP_TESTS_DIR is properly loaded from .env.testing or from environment variables if explicitly set.
   - Default: null
   - Example: 'localhost' or '[none]'
 
@@ -876,6 +892,23 @@ function get_setting(string $name, $default = null)
 
 ## Bootstrap Files
 
+### Bootstrap File Relationships
+
+**Overview**: The bootstrap files work together to create isolated test environments for each test type (unit, wp-mock, integration). Each test type has its own bootstrap file with specific requirements and dependencies.
+
+**Execution Flow**:
+1. PHPUnit configuration files (phpunit-unit.xml.dist, phpunit-wp-mock.xml.dist, phpunit-integration.xml.dist) set the PHPUNIT_BOOTSTRAP_TYPE environment variable
+2. All test types load bootstrap.php as their entry point
+3. bootstrap.php loads settings from .env.testing and provides the get_setting function
+4. bootstrap.php then loads the specific bootstrap file based on the test type
+5. Each specific bootstrap file sets up the environment for its test type
+
+**Key Design Principles**:
+- Each test type runs in its own isolated environment
+- Settings from .env.testing are loaded in bootstrap.php and made available to all test types
+- Explicit environment variables take precedence over .env.testing settings
+- Test types should be run sequentially, not simultaneously
+
 ### `bootstrap.php`
 
 **Location**: `/tests/bootstrap/bootstrap.php`
@@ -886,11 +919,17 @@ function get_setting(string $name, $default = null)
 - Loads Composer autoloader
 - Registers framework PSR-4 prefixes
 - Sets up error reporting
+- Loads settings from .env.testing
+- Provides the get_setting function for accessing settings
 - Loads specific bootstrap file based on test type (unit, wp-mock, or integration)
 
 **Test Type Selection**:
-- Uses environment variable `PHPUNIT_BOOTSTRAP_TYPE` to determine which specific bootstrap file to load
+- Uses `get_setting('PHPUNIT_BOOTSTRAP_TYPE', 'unit')` to determine which specific bootstrap file to load
 - Defaults to 'unit' if not specified
+
+**Dependencies**:
+- Requires a valid Composer autoloader
+- Expects .env.testing file to exist (but will work without it)
 
 ### `bootstrap-unit.php`
 
@@ -903,6 +942,11 @@ function get_setting(string $name, $default = null)
 - Sets up Brain\Monkey if available
 - Registers shutdown functions for proper teardown
 
+**Dependencies**:
+- Requires bootstrap.php to be loaded first
+- Requires Mockery to be installed
+- Optionally uses Brain\Monkey if available
+
 ### `bootstrap-wp-mock.php`
 
 **Location**: `/tests/bootstrap/bootstrap-wp-mock.php`
@@ -910,9 +954,16 @@ function get_setting(string $name, $default = null)
 **Purpose**: Handles initialization of testing environment for WP_Mock tests. Sets up WP_Mock and defines common WordPress constants and functions.
 
 **Functionality**:
+- Uses `get_setting()` for WordPress-related settings
 - Defines WordPress constants (ABSPATH, WP_DEBUG, etc.)
 - Initializes WP_Mock
 - Registers shutdown function to verify expectations
+
+**Dependencies**:
+- Requires bootstrap.php to be loaded first
+- Requires WP_CONTENT_DIR and other WordPress paths to be properly set
+- Requires WP_Mock to be installed
+- Uses settings from .env.testing
 
 ### `bootstrap-integration.php`
 
@@ -921,12 +972,16 @@ function get_setting(string $name, $default = null)
 **Purpose**: Handles initialization of testing environment for integration tests. Sets up WordPress test environment and database.
 
 **Functionality**:
-- Locates WordPress test library
+- Uses `get_setting('WP_TESTS_DIR')` to locate WordPress test library
+- Falls back to searching common locations if WP_TESTS_DIR is not set
 - Loads WordPress test bootstrap
-- Ensures database is properly configured according to design principles:
-  - Separate test database from WordPress database
-  - Reuse of WordPress database credentials
-  - Support for custom table prefixes
+- Sets up Mockery for integration tests
+
+**Dependencies**:
+- Requires bootstrap.php to be loaded first
+- Requires WP_TESTS_DIR to be set in .env.testing or as an environment variable
+- Requires WordPress test library to be installed
+- Requires a properly configured test database
 
 ## Setup and Execution
 
@@ -949,9 +1004,10 @@ function get_setting(string $name, $default = null)
    This sets up the WordPress test environment, including the test database.
 
 **Important Notes**:
-- The setup script changes directory to FILESYSTEM_WP_ROOT before running Lando commands
-- Lando must be running before executing the setup script
+- Tests are always run from within the WordPress environment (FILESYSTEM_WP_ROOT/wp-content/plugins/FRAMEWORK_DEST_NAME), never from the plugin source directory
 - The plugin files must be synced to WordPress before running the setup script
+- The setup script changes directory to FILESYSTEM_WP_ROOT before running Lando commands
+- Lando (or other local development container) must be running before executing the setup script
 
 ### Lando PHP Command Execution
 
@@ -1002,6 +1058,39 @@ When executing PHP commands in Lando environments, the following considerations 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
 - Test directory: `../tests/Integration`
+
+## Test Execution Scripts
+
+### `sync-and-test.php`
+
+**Location**: `/bin/sync-and-test.php`
+
+**Purpose**: Syncs the plugin to WordPress and runs PHPUnit tests. This script provides a simple way to run tests without requiring Composer or Lando.
+
+**Key Features**:
+- Syncs the plugin files to WordPress before running tests
+- Runs tests in the WordPress environment, not in the plugin source directory
+- Supports running specific test types (unit, wp-mock, integration) or all test types sequentially
+
+**Important Notes**:
+- Each test type (unit, wp-mock, integration) runs in its own isolated environment
+- When using the `--all` option, tests run sequentially and completely separately
+- Never attempt to run all test types simultaneously in a single PHPUnit process, as this causes conflicts between different test environments
+- The script loads environment variables from .env.testing, with explicit environment variables taking precedence
+
+**Usage**:
+```bash
+php bin/sync-and-test.php [options]
+```
+
+**Options**:
+- `--unit` - Run unit tests only
+- `--wp-mock` - Run WP Mock tests only
+- `--integration` - Run integration tests only
+- `--all` - Run all test types sequentially
+- `--file=<path>` - Run tests in a specific file
+- `--coverage` - Generate code coverage report
+- `--verbose` - Show verbose output
 
 ## Code Quality Scripts
 

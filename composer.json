@@ -31,16 +31,16 @@
     },
     "autoload": {
         "psr-4": {
-            "GL\\Testing\\Framework\\": "src/"
+            "WP_PHPUnit_Framework\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "GL\\Testing\\Framework\\Tests\\": "tests/"
+            "WP_PHPUnit_Framework\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "test": "phpunit -c config/phpunit.xml.dist",
+        "test": "composer run-script test:unit && composer run-script test:wp-mock && composer run-script test:integration",
         "test:unit": "phpunit -c config/phpunit-unit.xml.dist",
         "test:wp-mock": "phpunit -c config/phpunit-wp-mock.xml.dist",
         "test:integration": "phpunit -c config/phpunit-integration.xml.dist",

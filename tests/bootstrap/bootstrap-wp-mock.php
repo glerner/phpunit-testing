@@ -15,25 +15,31 @@
 
 declare(strict_types=1);
 
-namespace GL\Testing\Framework\Bootstrap;
+namespace WP_PHPUnit_Framework\Bootstrap;
 
 // Initialize error reporting
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 ini_set('display_errors', '1');
 
-// Define WordPress constants
+// Define WordPress constants using get_setting
 if (!defined('ABSPATH')) {
-	define('ABSPATH', sys_get_temp_dir() . '/wordpress/');
+	$abspath = get_setting('WP_ROOT', sys_get_temp_dir() . '/wordpress/');
+	define('ABSPATH', $abspath . '/');
 }
 
 if (!defined('WP_DEBUG')) {
-	define('WP_DEBUG', true);
+	define('WP_DEBUG', get_setting('WP_DEBUG', true));
 }
 
 // Common WordPress constants
 define('WPINC', 'wp-includes');
-define('WP_CONTENT_DIR', ABSPATH . 'wp-content');
-define('WP_PLUGIN_DIR', WP_CONTENT_DIR . '/plugins');
+
+// Use get_setting for content directories if available
+$wp_content_dir = get_setting('WP_CONTENT_DIR', ABSPATH . 'wp-content');
+define('WP_CONTENT_DIR', $wp_content_dir);
+
+$wp_plugin_dir = get_setting('WP_PLUGIN_DIR', WP_CONTENT_DIR . '/plugins');
+define('WP_PLUGIN_DIR', $wp_plugin_dir);
 
 // Initialize WP_Mock
 echo "Initializing WP_Mock\n";

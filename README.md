@@ -102,6 +102,8 @@ composer require glerner/phpunit-testing --dev
 
 ## Usage
 
+### Writing Tests
+
 Basic usage example:
 
 ```php
@@ -115,6 +117,60 @@ class Test_My_Class extends Unit_Test_Case {
     }
 }
 ```
+
+### Running Tests
+
+To run tests, you'll need to sync your plugin to the WordPress installation first, then navigate to your plugin directory inside WordPress and run the tests:
+
+```bash
+# Step 1: From your plugin development directory, sync to WordPress
+cd ~/sites/your-plugin/
+php bin/sync-to-wp.php
+
+# Step 2: IMPORTANT - Navigate to your plugin directory INSIDE WordPress
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+
+# Step 3: Run tests using Composer
+composer test:unit         # Run unit tests
+composer test:wp-mock      # Run WP_Mock tests
+composer test:integration  # Run integration tests
+composer test              # Run all tests
+```
+
+If you're using Lando, you can run tests directly with Lando commands:
+
+```bash
+# After syncing your plugin
+cd ~/sites/wordpress/wp-content/plugins/your-plugin/
+lando test:unit         # Run unit tests
+lando test:wp-mock      # Run WP_Mock tests
+lando test:mock         # Run mock tests
+lando test:integration  # Run integration tests
+lando test:coverage     # Generate code coverage report
+```
+
+> **IMPORTANT**: Tests must be run from within the WordPress environment. Only code quality tools like PHPCS or PHPStan can be run directly from your plugin development directory.
+
+#### Using the Sync-and-Test Script
+
+For a simpler approach, you can use the included sync-and-test.php script that handles all steps in one command:
+
+```bash
+# From your plugin development directory
+cd ~/sites/your-plugin/
+php bin/sync-and-test.php --unit
+```
+
+The script supports all the same options as the individual commands:
+
+```bash
+php bin/sync-and-test.php --wp-mock      # Run WP_Mock tests
+php bin/sync-and-test.php --integration  # Run integration tests
+php bin/sync-and-test.php --all          # Run all test types
+php bin/sync-and-test.php --coverage     # Generate code coverage
+```
+
+For more detailed instructions on running tests, including advanced configuration options, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
 
 ## Directory Structure
 
