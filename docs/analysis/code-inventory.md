@@ -928,6 +928,39 @@ function get_setting(string $name, $default = null)
   - Reuse of WordPress database credentials
   - Support for custom table prefixes
 
+## Setup and Execution
+
+### Setup Commands
+
+**Proper Execution Sequence**:
+
+1. **Sync plugin files to WordPress**:
+   ```bash
+   cd /path/to/phpunit-testing
+   composer sync:wp
+   ```
+   This copies the plugin files to the WordPress plugins directory at `FILESYSTEM_WP_ROOT/wp-content/plugins/FRAMEWORK_DEST_NAME/`.
+
+2. **Run the setup script**:
+   ```bash
+   cd /path/to/phpunit-testing
+   php bin/setup-plugin-tests.php
+   ```
+   This sets up the WordPress test environment, including the test database.
+
+**Important Notes**:
+- The setup script changes directory to FILESYSTEM_WP_ROOT before running Lando commands
+- Lando must be running before executing the setup script
+- The plugin files must be synced to WordPress before running the setup script
+
+### Lando PHP Command Execution
+
+When executing PHP commands in Lando environments, the following considerations are important:
+
+1. **Directory**: Lando commands must be run from the WordPress root directory (FILESYSTEM_WP_ROOT)
+2. **Shell Error Redirection**: The `2>&1` redirection must be added outside the command string when calling exec()
+3. **Path References**: Container paths (e.g., `/app/...`) must be used when referencing files within the Lando container
+
 ## PHPUnit Configuration Files
 
 ### `phpunit.xml.dist`

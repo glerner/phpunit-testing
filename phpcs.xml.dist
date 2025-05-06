@@ -72,6 +72,8 @@
                 <element value="Your_Plugin\\"/><!-- For namespaces -->
             </property>
         </properties>
+        <!-- Exclude WordPress test configuration file from prefix rules -->
+        <exclude-pattern>/tests/wp-tests-config.php</exclude-pattern>
     </rule>
 
     <!-- Custom Rules -->

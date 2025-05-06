@@ -1,0 +1,146 @@
+# Rebuilding Development Environment After System Updates
+
+This guide provides instructions for rebuilding your Docker, Lando, and Composer environments after system updates (such as Linux kernel updates or Docker version changes).
+
+## Docker Cleanup
+
+When system updates affect Docker, you may need to completely rebuild your Docker environment. Here's how to do it:
+
+### Basic Docker Cleanup
+
+```bash
+# Stop all running containers
+docker stop $(docker ps -a -q)
+
+# Remove all stopped containers
+docker rm $(docker ps -a -q)
+```
+
+### Complete Docker Cleanup
+
+For a more thorough cleanup (especially after major system updates):
+
+```bash
+# Complete cleanup in one command - removes containers, networks, images, and volumes
+docker system prune -a --volumes -f
+```
+
+This will reclaim significant disk space (often 10+ GB) and remove:
+- All stopped containers
+- All networks not used by at least one container
+- All dangling and unused images
+- All build cache
+- All volumes not used by at least one container
+
+### Restart Docker Service
+
+After cleanup, restart the Docker service:
+
+```bash
+sudo systemctl restart docker
+```
+
+## Rebuilding Lando Environment
+
+After Docker is cleaned up and restarted, rebuild your Lando environment:
+
+```bash
+# Navigate to your WordPress directory
+cd /path/to/wordpress
+
+# Destroy the existing Lando app
+lando destroy -y
+
+# Note: When you run 'lando destroy', it will download all packages
+# and rebuild everything from scratch. This process can take several minutes.
+
+# if lando destroy didn't start it:
+# lando start
+```
+
+Wait for Lando to complete the startup process. You should see successful connection messages for all services.
+
+## Rebuilding Composer Environment
+
+After Lando is running properly, rebuild your Composer environment:
+
+```bash
+# Navigate to your plugin development directory
+# (where the composer.json file is located)
+# Not your WordPress directory
+cd /path/to/phpunit-testing
+
+# Clear Composer cache (optional but recommended after system updates)
+composer clear-cache
+
+# Reinstall all dependencies
+composer install
+
+# Update dependencies to latest versions (recommended)
+composer update
+
+# Regenerate autoloader
+composer dump-autoload
+
+# Sync plugin files to WordPress
+composer sync:wp
+```
+
+## Rebuilding WordPress Test Environment
+
+Finally, set up the WordPress test environment:
+
+```bash
+# Run the setup script
+php bin/setup-plugin-tests.php
+```
+
+## Troubleshooting
+
+### Lando Connection Issues
+
+If you see errors like:
+```
+⚠ APPSERVER URLS
+  ✖ connect ECONNREFUSED 127.0.0.1:8080
+  ✖ Request failed with status code 500
+```
+
+Try these additional steps:
+1. Check if Docker is running: `systemctl status docker`
+2. Try restarting Lando: `lando restart`
+3. Check for port conflicts: `sudo lsof -i :8080`
+4. Rebuild the Lando app: `lando rebuild -y`
+
+### Composer Issues
+
+If Composer has issues after updates:
+1. Clear Composer cache: `composer clear-cache`
+2. Update Composer itself: `composer self-update`
+3. Remove vendor directory and reinstall: `rm -rf vendor && composer install`
+
+## Complete Rebuild Sequence
+
+For convenience, here's the complete sequence of commands for a full rebuild:
+
+```bash
+# Docker cleanup
+docker stop $(docker ps -a -q)
+docker system prune -a --volumes -f
+sudo systemctl restart docker
+
+# Lando rebuild
+cd /path/to/wordpress
+lando destroy -y
+lando start
+
+# Composer rebuild
+cd /path/to/phpunit-testing
+composer install
+composer sync:wp
+
+# WordPress test environment setup
+php bin/setup-plugin-tests.php
+```
+
+This sequence should resolve most issues that occur after system updates affecting Docker, Lando, or PHP.
