@@ -2,18 +2,69 @@
 
 This document provides an inventory of key functions, classes, and variables in the PHPUnit Testing Framework.
 
+## Table of Contents
+
+- [Namespace](#namespace)
+- [Exception Handling](#exception-handling)
+- [Important Global Variables](#important-global-variables)
+- [Functions](#functions)
+  - [load_settings_file()](#load_settings_file)
+  - [get_setting()](#get_setting)
+  - [get_phpunit_database_settings()](#get_phpunit_database_settings)
+  - [install_wp_test_suite()](#install_wp_test_suite)
+  - [format_php_command()](#format_php_command)
+  - [format_mysql_execution()](#format_mysql_execution)
+  - [drop_test_database_and_files()](#drop_test_database_and_files)
+  - [display_help()](#display_help)
+- [Variables](#variables)
+  - [Global Variables](#global-variables)
+  - [Key Configuration Variables](#key-configuration-variables)
+- [Constants](#constants)
+  - [Script Constants](#script-constants)
+  - [Terminal Color Constants](#terminal-color-constants)
+- [Dependencies](#dependencies)
+- [Bootstrap Files](#bootstrap-files)
+  - [Bootstrap File Relationships](#bootstrap-file-relationships)
+  - [bootstrap.php](#bootstrapphp)
+  - [bootstrap-unit.php](#bootstrap-unitphp)
+  - [bootstrap-wp-mock.php](#bootstrap-wp-mockphp)
+  - [bootstrap-integration.php](#bootstrap-integrationphp)
+- [Test Execution Scripts](#test-execution-scripts)
+  - [sync-and-test.php](#sync-and-testphp)
+- [Configuration Files](#configuration-files)
+  - [phpunit-integration.xml.dist](#phpunit-integrationxmldist)
+  - [phpunit-unit.xml.dist](#phpunit-unitxmldist)
+  - [phpunit-wp-mock.xml.dist](#phpunit-wp-mockxmldist)
+
 ## Namespace
+
+The framework uses the following namespace:
 
 ```php
 namespace WP_PHPUnit_Framework;
 ```
 
-PHP core classes within the namespace must be prefixed with a backslash to indicate they're from the global namespace:
+### Namespace Conventions
 
-```php
-\Throwable    // Correct reference to global Throwable class
-\Exception    // Correct reference to global Exception class
-```
+1. **Global Classes**: WordPress and PHP core classes within the namespace must be prefixed with a backslash to indicate they're from the global namespace:
+
+   ```php
+   \Throwable    // Correct reference to global Throwable class
+   \Exception    // Correct reference to global Exception class
+   \WP_Mock      // Correct reference to global WP_Mock class
+   ```
+
+2. **Namespace References**: Use the "fully qualified from current namespace" approach for clarity:
+
+   ```php
+   // If you're in this namespace:
+   namespace WP_PHPUnit_Framework\Tests;
+
+   // You can reference a child namespace like this:
+   use Unit\Test_Case; // Refers to WP_PHPUnit_Framework\Tests\Unit\Test_Case
+   ```
+
+3. **PSR-4 Compliance**: Namespaces should match directory structure and follow PSR-4 conventions.
 
 ## Exception Handling
 

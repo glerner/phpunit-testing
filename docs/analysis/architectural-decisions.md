@@ -4,13 +4,13 @@ This document captures key architectural decisions made in the PHPUnit Testing F
 
 ## Core Design Decisions
 
-### Database Settings Priority Order
+### Settings (and Database Settings) Priority Order
 
-**Decision**: Implement a strict priority order for loading database settings:
+**Decision**: Implement a strict priority order for loading settings:
 1. wp-config.php (lowest priority)
 2. Config file (.env.testing)
 3. Environment variables
-4. Lando configuration (highest priority)
+4. Lando configuration (highest priority, database and other application settings won't work except how defined in .lando.yml)
 
 **Rationale**: Provides predictable configuration behavior while allowing for environment-specific overrides.
 
