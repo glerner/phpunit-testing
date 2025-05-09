@@ -16,7 +16,10 @@ use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 // Use the stub WP_UnitTestCase during development, but use the real one in WordPress
 if (!class_exists('WP_UnitTestCase')) {
 	// For development and static analysis
-	require_once dirname(__DIR__) . '/Stubs/WP_UnitTestCase.php';
+	$stub_path = dirname(dirname(__DIR__)) . '/tests/framework/stubs/WP_UnitTestCase.php';
+	if (file_exists($stub_path)) {
+		require_once $stub_path;
+	}
 
 	// Add a phpcs suppression for the undefined WordPress function
 	// phpcs:disable WordPress.WP.AlternativeFunctions

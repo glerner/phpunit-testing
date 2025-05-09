@@ -34,7 +34,12 @@ $wp_tests_dir = get_setting('WP_TESTS_DIR');
 
 // Try to find the WordPress test library in common locations
 if (!$wp_tests_dir) {
+	// Get WordPress root from settings
+	$wp_root = get_setting('FILESYSTEM_WP_ROOT');
+	
 	$possible_locations = [
+	    // As installed by setup-plugin-tests.php
+	    $wp_root . '/wp-content/plugins/wordpress-develop/tests/phpunit',
 	    // As installed by composer wordpress-dev package
 	    dirname(__DIR__, 4) . '/vendor/wordpress/wordpress-develop/tests/phpunit',
 	    // As installed via wp-cli scaffold

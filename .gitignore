@@ -65,6 +65,8 @@ test_analysis_results*.txt
 *.cache
 *.tmp
 junk.txt
+changes.diff
+cascade-bug-report.md
 
 # Keep all configuration templates (*.dist files)
 !*.dist
