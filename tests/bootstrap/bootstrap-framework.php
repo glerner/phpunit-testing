@@ -26,11 +26,25 @@ require_once dirname(__DIR__) . '/framework/framework-functions.php';
 require_once dirname(__DIR__) . '/framework/stubs/WP_UnitTestCase.php';
 
 // Load environment variables from .env.testing first
-$env_file = dirname(dirname(__DIR__)) . '/.env.testing';
-echo "Loading environment variables from $env_file\n";
+// First try the current directory where the script is being run from
+$current_dir_env_file = getcwd() . '/.env.testing';
+$framework_dir_env_file = dirname(dirname(__DIR__)) . '/.env.testing';
+
+// Try current directory first, then framework directory
+if (file_exists($current_dir_env_file)) {
+    $env_file = $current_dir_env_file;
+    echo "Loading environment variables from current directory: $env_file\n";
+} else {
+    $env_file = $framework_dir_env_file;
+    echo "Loading environment variables from framework directory: $env_file\n";
+}
 
 // Use the existing load_settings_file function
 $settings = \WP_PHPUnit_Framework\load_settings_file($env_file);
+
+// Set the global $loaded_settings variable for get_setting() function to use
+global $loaded_settings;
+$loaded_settings = $settings;
 
 // Now include the setup-plugin-tests.php file
 require_once dirname(dirname(__DIR__)) . '/bin/setup-plugin-tests.php';

@@ -27,18 +27,16 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bin;
 
+// Include framework functions
+require_once dirname(__DIR__) . '/tests/framework/framework-functions.php';
+
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
 // Set default timezone to avoid warnings
 date_default_timezone_set('UTC');
-
-/**
- * Escape a string for CLI output
- *
- * @param string $text Text to escape
- * @return string
- */
-function esc_cli(string $text): string {
-	return $text;
-}
 
 /**
  * Print a colored message to the console
@@ -70,7 +68,7 @@ function colored_message(string $message, string $color = 'normal'): void {
 function print_usage(): void {
 	colored_message("Usage:", 'blue');
 	echo esc_cli("  php bin/sync-and-test.php [options] [--file=<file>]\n\n");
-	
+
 	colored_message("Options:", 'blue');
 	echo esc_cli("  --help          Show this help message\n");
 	echo esc_cli("  --unit          Run unit tests (tests that don't require WordPress functions)\n");
@@ -80,7 +78,7 @@ function print_usage(): void {
 	echo esc_cli("  --coverage      Generate code coverage report in build/coverage directory\n");
 	echo esc_cli("  --verbose       Show verbose output\n");
 	echo esc_cli("  --file=<file>   Run a specific test file instead of the entire test suite\n\n");
-	
+
 	colored_message("Examples:", 'blue');
 	echo esc_cli("  php bin/sync-and-test.php --unit\n");
 	echo esc_cli("  php bin/sync-and-test.php --wp-mock --file=tests/wp-mock/specific-test.php\n");
@@ -126,48 +124,27 @@ if ($options['help'] || (!$options['unit'] && !$options['wp-mock'] && !$options[
 	exit(0);
 }
 
-// Load environment variables from .env.testing if it exists
+// Load settings from .env.testing
 $env_file = dirname(__DIR__) . '/.env.testing';
-if (file_exists($env_file)) {
-	colored_message("Loading environment variables from .env.testing...", 'blue');
-	
-	// Read the file line by line to avoid parse_ini_file issues
-	$lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-	foreach ($lines as $line) {
-		// Skip comments
-		if (strpos(trim($line), '#') === 0) {
-			continue;
-		}
+colored_message("Loading settings from .env.testing...", 'blue');
+global $loaded_settings;
+$loaded_settings = load_settings_file($env_file);
 
-		// Parse valid environment variable lines
-		if (strpos($line, '=') !== false) {
-			list($key, $value) = explode('=', $line, 2);
-			$key = trim($key);
-			$value = trim($value);
-
-			// Remove quotes if present
-			if (preg_match('/^(["\'])(.*)\1$/', $value, $matches)) {
-				$value = $matches[2];
-			}
-
-			putenv("$key=$value");
-		}
-	}
-}
-
-// Define paths from environment variables
-$framework_source = getenv('FRAMEWORK_SOURCE') ? getenv('FRAMEWORK_SOURCE') : dirname(__DIR__);
+// Define paths from settings
+$framework_source = get_setting('FRAMEWORK_SOURCE', dirname(__DIR__));
 
 // FILESYSTEM_WP_ROOT is required - no default fallback
-$filesystem_wp_root = getenv('FILESYSTEM_WP_ROOT');
+$filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
 if (empty($filesystem_wp_root)) {
-	colored_message("Error: FILESYSTEM_WP_ROOT environment variable is not set.", 'red');
+	colored_message("Error: FILESYSTEM_WP_ROOT setting is not set.", 'red');
 	colored_message("Please set this in your .env.testing file or environment.", 'red');
 	exit(1);
 }
 
-$framework_dest_name = getenv('FRAMEWORK_DEST_NAME') ? getenv('FRAMEWORK_DEST_NAME') : 'gl-phpunit-testing-framework';
-$framework_dest = $filesystem_wp_root . '/wp-content/plugins/' . $framework_dest_name;
+// Get plugin slug and folder path from settings
+$framework_dest_name = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
+$folder_in_wordpress = \WP_PHPUnit_Framework\get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+$framework_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $framework_dest_name;
 
 colored_message("Using paths:", 'blue');
 echo esc_cli("  Framework source: $framework_source\n");
@@ -234,22 +211,22 @@ colored_message("\nStep 3: Running tests...", 'green');
  */
 function build_phpunit_command($config_file, $test_type, $options) {
 	$cmd = "./vendor/bin/phpunit -c config/{$config_file}";
-	
+
 	// Add verbose option if requested
 	if ($options['verbose']) {
 		$cmd .= ' --verbose';
 	}
-	
+
 	// Add coverage option if requested
 	if ($options['coverage']) {
 		$cmd .= " --coverage-html build/coverage-{$test_type}";
 	}
-	
+
 	// Add specific file if provided
 	if (!empty($options['file'])) {
 		$cmd .= ' ' . $options['file'];
 	}
-	
+
 	return $cmd;
 }
 
@@ -274,25 +251,25 @@ if ($options['unit']) {
 	passthru($phpunit_cmd, $phpunit_return);
 } elseif ($options['all']) {
 	colored_message("Running all tests sequentially...", 'green');
-	
+
 	// Run unit tests
 	colored_message("\nRunning unit tests...", 'blue');
 	$unit_cmd = build_phpunit_command('phpunit-unit.xml.dist', 'unit', $options);
 	colored_message("Executing: $unit_cmd", 'blue');
 	passthru($unit_cmd, $unit_return);
-	
+
 	// Run WP Mock tests
 	colored_message("\nRunning WP Mock tests...", 'blue');
 	$wp_mock_cmd = build_phpunit_command('phpunit-wp-mock.xml.dist', 'wp-mock', $options);
 	colored_message("Executing: $wp_mock_cmd", 'blue');
 	passthru($wp_mock_cmd, $wp_mock_return);
-	
+
 	// Run integration tests
 	colored_message("\nRunning integration tests...", 'blue');
 	$integration_cmd = build_phpunit_command('phpunit-integration.xml.dist', 'integration', $options);
 	colored_message("Executing: $integration_cmd", 'blue');
 	passthru($integration_cmd, $integration_return);
-	
+
 	// Check if any test suite failed
 	if ($unit_return !== 0 || $wp_mock_return !== 0 || $integration_return !== 0) {
 		colored_message("\nSome tests failed:", 'red');
@@ -301,9 +278,9 @@ if ($options['unit']) {
 		if ($integration_return !== 0) colored_message("  - Integration tests failed with exit code $integration_return", 'red');
 		exit(1);
 	}
-	
+
 	colored_message("\nAll test suites completed successfully! 🎉", 'green');
-	
+
 	// Skip the regular PHPUnit execution since we've already run all test types
 	exit(0);
 }
@@ -311,7 +288,7 @@ if ($options['unit']) {
 // Check if tests passed
 if ($phpunit_return === 0) {
 	colored_message("\nTests completed successfully! 🎉", 'green');
-	
+
 	// Show coverage report path if generated
 	if ($options['coverage']) {
 		$coverage_path = $framework_dest . '/build/coverage/index.html';

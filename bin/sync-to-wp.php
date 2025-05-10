@@ -20,56 +20,35 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bin;
 
-/**
- * Escape a string for CLI output
- *
- * @param string $text Text to escape
- * @return string
- */
-function esc_cli( string $text ): string {
-    return $text;
-}
+// Include framework functions
+require_once dirname(__DIR__) . '/tests/framework/framework-functions.php';
 
-// Load environment variables from .env.testing if it exists
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
+// Load settings from .env.testing
 $env_file = dirname(__DIR__) . '/.env.testing';
-if (file_exists($env_file)) {
-    // Read the file line by line to avoid parse_ini_file issues
-    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        // Skip comments
-        if (strpos(trim($line), '#') === 0) {
-            continue;
-        }
+global $loaded_settings;
+$loaded_settings = load_settings_file($env_file);
 
-        // Parse valid environment variable lines
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
 
-            // Remove quotes if present
-            if (preg_match('/^(["\'])(.*)\1$/', $value, $matches)) {
-                $value = $matches[2];
-            }
-
-            putenv("$key=$value");
-        }
-    }
-}
-
-// Define paths from environment variables
-$framework_source = getenv('FRAMEWORK_SOURCE') ? getenv('FRAMEWORK_SOURCE') : dirname(__DIR__);
+// Define paths from settings
+$framework_source = get_setting('FRAMEWORK_SOURCE', dirname(__DIR__));
 
 // FILESYSTEM_WP_ROOT is required - no default fallback
-$filesystem_wp_root = getenv('FILESYSTEM_WP_ROOT');
+$filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
 if (empty($filesystem_wp_root)) {
-    echo esc_cli("Error: FILESYSTEM_WP_ROOT environment variable is not set.\n");
+    echo esc_cli("Error: FILESYSTEM_WP_ROOT setting is not set.\n");
     echo esc_cli("Please set this in your .env.testing file or environment.\n");
     exit(1);
 }
 
-$framework_dest_name = getenv('FRAMEWORK_DEST_NAME') ? getenv('FRAMEWORK_DEST_NAME') : 'gl-phpunit-testing-framework';
-$framework_dest = $filesystem_wp_root . '/wp-content/plugins/' . $framework_dest_name;
+// Get plugin slug and folder path from settings
+$framework_dest_name = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
+$folder_in_wordpress = \WP_PHPUnit_Framework\get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+$framework_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $framework_dest_name;
 
 echo esc_cli("Using paths:\n");
 echo esc_cli("  Framework source: $framework_source\n");
@@ -137,41 +116,8 @@ chdir($framework_dest);
 echo esc_cli("Regenerating autoloader files...\n");
 exec('composer dump-autoload');
 
-// Set up WordPress test environment for integration tests
-if (getenv('SETUP_WP_TESTS') === 'true') {
-    echo esc_cli("Setting up WordPress test environment...\n");
-
-    $wp_tests_dir = getenv('WP_TESTS_DIR');
-
-    // Check if WordPress test library is available or needs to be installed
-    if (!is_dir($wp_tests_dir)) {
-        echo esc_cli("WordPress test library not found at: $wp_tests_dir\n");
-
-        // Check if wp-cli is available
-        exec('which wp', $wp_output, $wp_return);
-        if ($wp_return === 0) {
-            echo esc_cli("Installing WordPress test library using wp-cli...\n");
-            exec("wp scaffold plugin-tests --dir='$framework_dest'");
-        } else {
-            echo esc_cli("wp-cli not found. Please install WordPress test library manually.\n");
-            echo esc_cli("See: https://developer.wordpress.org/cli/commands/scaffold/plugin-tests/\n");
-        }
-    } else {
-        echo esc_cli("WordPress test library found at: $wp_tests_dir\n");
-    }
-
-    // Set up the test database if install script exists
-    $install_script = "$wp_tests_dir/bin/install-wp-tests.sh";
-    if (file_exists($install_script)) {
-        echo esc_cli("Setting up test database...\n");
-        $db_name = getenv('WP_TESTS_DB_NAME') ? getenv('WP_TESTS_DB_NAME') : 'wordpress_test';
-        $db_user = getenv('WP_TESTS_DB_USER') ? getenv('WP_TESTS_DB_USER') : 'root';
-        $db_pass = getenv('WP_TESTS_DB_PASSWORD') ? getenv('WP_TESTS_DB_PASSWORD') : '';
-        $db_host = getenv('WP_TESTS_DB_HOST') ? getenv('WP_TESTS_DB_HOST') : 'localhost';
-
-        exec("$install_script $db_name $db_user $db_pass $db_host latest true");
-    }
-}
+// Note: For setting up the WordPress test environment, use the setup-plugin-tests.php script
+// Example: php bin/setup-plugin-tests.php
 
 // Return to framework destination directory
 echo esc_cli("Framework files synced to: $framework_dest\n");
@@ -183,4 +129,4 @@ echo esc_cli("\nTo run integration tests:\n");
 echo esc_cli("1. Make sure your WordPress test environment is set up\n");
 echo esc_cli("2. Run: composer test:integration\n");
 echo esc_cli("3. For unit tests: composer test:unit\n");
-echo esc_cli("4. For WP-Mock tests: composer test:wp-mock\n");
+echo esc_cli("4. For WP-Mock tests: composer test:wp-mock\n\n");

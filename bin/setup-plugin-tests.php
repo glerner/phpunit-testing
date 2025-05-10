@@ -336,7 +336,6 @@ function install_test_suite(
     }
 
     // Create database and grant permissions
-    echo "Creating database...\n";
 
     // Build the SQL command using heredoc for better readability
     // Write SQL exactly as you would type it directly into MySQL

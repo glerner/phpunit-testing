@@ -57,7 +57,8 @@ class Config_Reader_Test extends Unit_Test_Case {
 		$this->test_config = [
 			'FILESYSTEM_WP_ROOT' => '/path/to/wordpress',
 			'FILESYSTEM_PLUGIN_ROOT' => '/path/to/plugin',
-			'FRAMEWORK_DEST_NAME' => 'test-plugin',
+			'YOUR_PLUGIN_SLUG' => 'test-plugin',
+			'FOLDER_IN_WORDPRESS' => 'wp-content/plugins',
 			'DB_NAME' => 'asdf_db',
 			'DB_USER' => 'asdf_user',
 			'DB_PASSWORD' => 'asdf_password',
@@ -76,7 +77,8 @@ class Config_Reader_Test extends Unit_Test_Case {
 		$env_content = "# WordPress paths\n";
 		$env_content .= "FILESYSTEM_WP_ROOT={$this->test_config['FILESYSTEM_WP_ROOT']}\n";
 		$env_content .= "FILESYSTEM_PLUGIN_ROOT={$this->test_config['FILESYSTEM_PLUGIN_ROOT']}\n";
-		$env_content .= "FRAMEWORK_DEST_NAME={$this->test_config['FRAMEWORK_DEST_NAME']}\n\n";
+		$env_content .= "YOUR_PLUGIN_SLUG={$this->test_config['YOUR_PLUGIN_SLUG']}\n";
+		$env_content .= "FOLDER_IN_WORDPRESS={$this->test_config['FOLDER_IN_WORDPRESS']}\n\n";
 
 		$env_content .= "# Database settings\n";
 		$env_content .= "DB_NAME={$this->test_config['DB_NAME']}\n";

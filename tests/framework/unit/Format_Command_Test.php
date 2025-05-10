@@ -17,7 +17,7 @@ use WP_PHPUnit_Framework\Unit\Unit_Test_Case;
 
 // Import the functions from the WP_PHPUnit_Framework namespace
 use function WP_PHPUnit_Framework\format_php_command;
-use function WP_PHPUnit_Framework\format_mysql_command;
+use function WP_PHPUnit_Framework\format_mysql_parameters_and_query;
 
 /**
  * Test case for command formatting functions
@@ -123,12 +123,12 @@ class Format_Command_Test extends Unit_Test_Case {
 	}
 
 	/**
-	 * Test that MySQL commands are properly formatted
+	 * Test that MySQL parameters and SQL queries are properly formatted
 	 */
-	public function test_format_mysql_command(): void {
+	public function test_format_mysql_parameters_and_query(): void {
 		// Test each case defined in the test data
 		foreach ($this->mysql_test_data as $test_name => $test_case) {
-			$command = format_mysql_command(
+			$command = format_mysql_parameters_and_query(
 				$test_case['host'],
 				$test_case['user'],
 				$test_case['pass'],
@@ -137,31 +137,36 @@ class Format_Command_Test extends Unit_Test_Case {
 				$test_case['command_type']
 			);
 
-			// Verify the command contains the expected elements
-			$this->assertStringContainsString('mysql', $command, "Command should contain 'mysql' for test case: {$test_name}");
+			// format_mysql_command should NOT include the 'mysql' executable
+			// It only formats parameters and SQL, not the full command
+			$this->assertStringNotContainsString('mysql ', $command, "Command should NOT contain 'mysql ' for test case: {$test_name}");
+
+			// It should contain SQL-related elements though
+			$this->assertStringContainsString('-e', $command, "Command should contain SQL execution parameter '-e' for test case: {$test_name}");
 
 			// For basic MySQL format tests
 			if ($test_case['host'] !== 'lando_mysql') {
-				// MySQL host has a space after -h
+				// MySQL host has a space after -h and the value is quoted
 				$this->assertStringContainsString(
-					"-h {$test_case['host']}",
+					"-h '{$test_case['host']}'",
 					$command,
-					"Host parameter should be formatted as '-h host' for test case: {$test_name}"
+					"Host parameter should be formatted as '-h \'host\'' for test case: {$test_name}"
 				);
 
-				// MySQL user has a space after -u
+				// MySQL user has a space after -u and the value is quoted
 				$this->assertStringContainsString(
-					"-u {$test_case['user']}",
+					"-u '{$test_case['user']}'",
 					$command,
-					"User parameter should be formatted as '-u user' for test case: {$test_name}"
+					"User parameter should be formatted as '-u \'user\'' for test case: {$test_name}"
 				);
 
-				// MySQL password has NO space after -p
+				// MySQL password has NO space after -p and NO quotes
+
 				if (!empty($test_case['pass'])) {
 					$this->assertStringContainsString(
 						"-p{$test_case['pass']}",
 						$command,
-						"Password parameter should be formatted as '-ppassword' for test case: {$test_name}"
+						"Password parameter should be formatted as '-ppassword' (no quotes) for test case: {$test_name}"
 					);
 				}
 

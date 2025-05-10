@@ -60,11 +60,21 @@ function get_setting( string $name, mixed $default = null ): mixed {
     if ($env_value !== false) {
         return $env_value;
     }
+error_log("About to load Settings for $name");
 
     // Check our loaded settings (already loaded from .env.testing)
     global $loaded_settings;
     if (isset($loaded_settings[ $name ])) {
         return $loaded_settings[ $name ];
+    }
+
+    // Silently log critical setting issues to error log without screen output
+    if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
+        if (empty($loaded_settings)) {
+            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line']);
+        } else if (!isset($loaded_settings[$name])) {
+            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line']);
+        }
     }
 
     // Return default if not found
@@ -233,11 +243,11 @@ function get_database_settings(
     }
 
     // Display the final settings
-    echo esc_cli("WordPress Database settings:\n");
-    echo esc_cli("- Host: {$db_settings['db_host']}\n");
-    echo esc_cli("- User: {$db_settings['db_user']}\n");
-    echo esc_cli("- Database: {$db_settings['db_name']}\n");
-    echo esc_cli('- Password length: ' . strlen($db_settings['db_pass']) . "\n");
+    // echo esc_cli("WordPress Database settings:\n");
+    // echo esc_cli("- Host: {$db_settings['db_host']}\n");
+    // echo esc_cli("- User: {$db_settings['db_user']}\n");
+    // echo esc_cli("- Database: {$db_settings['db_name']}\n");
+    // echo esc_cli('- Password length: ' . strlen($db_settings['db_pass']) . "\n");
 
     return $db_settings;
 }
@@ -252,9 +262,9 @@ function get_database_settings(
  */
 function format_ssh_command( string $ssh_command, string $command ): string {
     // Debug: Show the input command
-    echo esc_cli("\nDebug: format_ssh_command input:\n");
-    echo esc_cli("SSH command: $ssh_command\n");
-    echo esc_cli("Command to execute: $command\n");
+    // echo esc_cli("\nDebug: format_ssh_command input:\n");
+    // echo esc_cli("SSH command: $ssh_command\n");
+    // echo esc_cli("Command to execute: $command\n");
 
     // For Lando and other SSH commands, we need to properly escape quotes
     // The best approach is to use single quotes for the outer shell
@@ -262,11 +272,11 @@ function format_ssh_command( string $ssh_command, string $command ): string {
     if (strpos($ssh_command, 'lando ssh') === 0) {
         // Lando requires the -c flag to execute commands
         $result = "$ssh_command -c '  $command  ' 2>&1";
-        echo esc_cli("Debug: Using Lando SSH format\n");
+        // echo esc_cli("Debug: Using Lando SSH format\n");
     } else {
         // Regular SSH command
         $result = "$ssh_command '  $command  ' 2>&1";
-        echo esc_cli("Debug: Using regular SSH format\n");
+        // echo esc_cli("Debug: Using regular SSH format\n");
     }
 
     echo esc_cli("Debug: Final SSH command: $result\n");
@@ -279,7 +289,7 @@ function format_ssh_command( string $ssh_command, string $command ): string {
  *
  * @param string $php_script_path Path to the PHP script to execute
  * @param array  $arguments       Command line arguments to pass to the script
- * @param string $command_type    Type of command to generate: 'auto', 'direct', or 'docker'
+ * @param string $command_type    Type of command to generate: 'auto', 'direct', 'docker', 'lando_php', or 'lando_exec'
  * @return string Formatted command
  */
 function format_php_command( string $php_script_path, array $arguments = [], string $command_type = 'auto' ): string {
@@ -297,10 +307,14 @@ function format_php_command( string $php_script_path, array $arguments = [], str
 	}
 
 	// Format the command based on type
-	if ( 'docker' === $command_type ) {
+	if ( 'lando_php' === $command_type ) {
+		$command = 'lando php "' . $php_script_path . '"';
+	} elseif ( 'lando_exec' === $command_type ) {
+		$command = 'lando exec appserver -- php "' . $php_script_path . '"';
+	} elseif ( 'docker' === $command_type ) {
 		$command = 'php ' . $php_script_path;
 	} else {
-		$command = 'php ' . '"' . $php_script_path . '"';
+		$command = 'php "' . $php_script_path . '"';
 	}
 
 	// Add arguments if provided
@@ -321,7 +335,7 @@ function format_php_command( string $php_script_path, array $arguments = [], str
 
 
 /**
- * Format MySQL command parameters and SQL query
+ * Format MySQL parameters and SQL query (without the mysql executable)
  *
  * This function formats MySQL command parameters and SQL query, but does NOT include
  * the actual 'mysql' or 'lando mysql' executable in the returned string. It only handles
@@ -336,16 +350,18 @@ function format_php_command( string $php_script_path, array $arguments = [], str
  * @param string      $command_type The type of command ('lando_direct', 'ssh', or 'direct')
  * @return string Formatted MySQL parameters and SQL command
  */
-function format_mysql_command( string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'direct' ): string {
+function format_mysql_parameters_and_query( string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'direct' ): string {
 	// Convert command type to lowercase for consistent comparison
 	$command_type = strtolower( $command_type );
 
-	// Build the connection parameters
-	$connection_params = " -h" . escapeshellarg( $host ) . " -u" . escapeshellarg( $user );
+	// Build the connection parameters exactly matching test expectations
+	// Note the space after -h and -u, but no space after -p
+	$connection_params = "-h " . escapeshellarg( $host ) . " -u " . escapeshellarg( $user );
 
 	// Add password if provided
 	if ( ! empty( $pass ) ) {
-		$connection_params .= " -p" . escapeshellarg( $pass );
+		// MySQL password syntax: NO space between -p and password, NO quotes
+		$connection_params .= " -p" . $pass;
 	}
 
 	// Add database if provided
@@ -376,8 +392,7 @@ function format_mysql_command( string $host, string $user, string $pass, string 
 	} else {
 		// For SSH or direct MySQL, escape both single and double quotes
 		$escaped_sql = str_replace( "'", "\\'", $sql );
-		$escaped_sql = str_replace( '"', '\\"', $escaped_sql );
-	}
+		$escaped_sql = str_replace( '"', '\\"', $escaped_sql );	}
 
 	// Add the SQL command with proper quoting
 	$formatted_command = "$connection_params -e '$escaped_sql'";
@@ -400,16 +415,7 @@ function format_mysql_command( string $host, string $user, string $pass, string 
 function load_settings_file( string $env_file ): array {
 	$settings = [];
 
-	// Always check for critical environment variables first
-	$critical_vars = ['WP_ROOT', 'FILESYSTEM_WP_ROOT'];
-	foreach ($critical_vars as $var) {
-		$env_value = getenv($var);
-		if ($env_value !== false) {
-			$settings[$var] = $env_value;
-		}
-	}
-
-	// Then load from .env file
+	// Load from .env file
 	if ( file_exists( $env_file ) ) {
 		$file_content = file_get_contents($env_file);
 		if ($file_content === false) {
@@ -478,8 +484,8 @@ function get_phpunit_database_settings( array $wp_db_settings, ?string $db_name 
 
 	// If custom database name is not provided, use WordPress database name with '_test' suffix
 	if ( empty( $db_name ) ) {
-		echo "Warning: No PHPUnit Test database name provided. Using WordPress database name (or 'wordpress' if not set) with '_test' suffix.\n";
 		$db_name = ($wp_db_settings['db_name'] ?? 'wordpress') . '_test';
+		echo "Warning: No PHPUnit Test database name provided. Using $db_name.\n";
 	}
 
 	// Prepare test database settings with keys matching what setup-plugin-tests.php expects
@@ -611,11 +617,11 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     }
 
     // Format the MySQL parameters with the appropriate command type
-    $mysql_params = format_mysql_command($host, $user, $pass, $sql, $db, $command_type);
+    $mysql_params = format_mysql_parameters_and_query($host, $user, $pass, $sql, $db, $command_type);
 
     // Debug output
     // echo "\nDebug: format_mysql_execution input:\n";
-    echo esc_cli("Original SQL: $sql\n");
+    // echo esc_cli("Original SQL: $sql\n");
     // echo esc_cli("SSH command: $ssh_command  MySQL params: $mysql_params\n");
     // echo "Command type: $command_type\n";
 
