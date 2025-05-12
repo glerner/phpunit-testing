@@ -60,20 +60,20 @@ function get_setting( string $name, mixed $default = null ): mixed {
     if ($env_value !== false) {
         return $env_value;
     }
-    error_log("About to load Settings for $name\n", 3, '/tmp/phpunit-testing.log');
 
     // Check our loaded settings (already loaded from .env.testing)
     global $loaded_settings;
     if (isset($loaded_settings[ $name ])) {
         return $loaded_settings[ $name ];
     }
+    $error_log_file = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing-error.log');
 
     // Silently log critical setting issues to error log without screen output
     if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
         if (empty($loaded_settings)) {
-            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, '/tmp/phpunit-settings-debug.log');
+            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, $error_log_file);
         } else if (!isset($loaded_settings[$name])) {
-            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, '/tmp/phpunit-settings-debug.log');
+            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, $error_log_file);
         }
     }
 
