@@ -13,9 +13,18 @@ This document provides an inventory of key functions, classes, and variables in 
   - [get_phpunit_database_settings()](#get_phpunit_database_settings)
   - [install_wp_test_suite()](#install_wp_test_suite)
   - [format_php_command()](#format_php_command)
+  - [format_mysql_command()](#format_mysql_command)
   - [format_mysql_execution()](#format_mysql_execution)
   - [drop_test_database_and_files()](#drop_test_database_and_files)
   - [display_help()](#display_help)
+  - [esc_cli()](#esc_cli)
+  - [find_wordpress_root()](#find_wordpress_root)
+  - [get_wp_config_value()](#get_wp_config_value)
+  - [download_wp_tests()](#download_wp_tests)
+  - [generate_wp_tests_config()](#generate_wp_tests_config)
+  - [colored_message()](#colored_message)
+  - [print_usage()](#print_usage)
+  - [build_phpunit_command()](#build_phpunit_command)
 - [Variables](#variables)
   - [Global Variables](#global-variables)
   - [Key Configuration Variables](#key-configuration-variables)
@@ -459,7 +468,7 @@ function load_settings_file(): array
 
 **Purpose**: Loads settings from the `.env.testing` file in the project root directory.
 
-**Parameters**: None
+**Parameters**: None (currently hardcoded to use `.env.testing`)
 
 **Return Value**:
 - Type: array
@@ -477,6 +486,18 @@ function load_settings_file(): array
 6. Remove quotes from values if present
 7. Store settings in an array
 8. Return the settings array
+
+**Limitations**:
+- Currently hardcodes the path to `.env.testing` in the project root
+- Cannot load settings from a different file or location
+
+**Suggested Improvement**:
+```php
+function load_settings_file(?string $env_file = null): array {
+    $env_file = $env_file ?? PROJECT_DIR . '/.env.testing';
+    // Rest of the function remains the same
+}
+```
 
 ### `format_ssh_command()`
 
@@ -515,32 +536,53 @@ function format_ssh_command(string $ssh_command, string $command): string
 **Special Handling**:
 - Adds proper quoting to ensure command executes correctly in the SSH environment
 
+### `is_lando_environment()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function is_lando_environment(?string $command = null): bool
+```
+
+**Purpose**: Determines if the current environment is a Lando environment or if a specified command is a Lando command.
+
+**Parameters**:
+- `$command`: Optional command to check if it's a Lando command
+  - Type: string|null
+  - Required: No (default: null)
+  - Example: 'lando php', 'lando exec appserver'
+
+**Return Value**: Boolean indicating whether the environment is a Lando environment or the command is a Lando command.
+
+
 ### `format_php_command()`
 
 **Location**: `/bin/setup-plugin-tests.php`
 
 **Signature**:
 ```php
-function format_php_command( string $php_command, array $arguments, bool $is_lando = false ): string
+function format_php_command( string $php_script_path, array $arguments = [], string $command_type = 'auto' ): string
 ```
 
 **Purpose**: Formats PHP commands with proper escaping for file paths, ensuring they work correctly with spaces and special characters.
 
 **Parameters**:
-- `$php_command`: The PHP command to use
+- `$php_script_path`: The path to the PHP script to execute
   - Type: string
   - Required: Yes
-  - Example: 'php', 'lando php'
+  - Example: '/app/path/to/script.php'
 
-- `$arguments`: Array of arguments to pass to the PHP command
+- `$arguments`: Array of arguments to pass to the PHP script (not including the script itself)
   - Type: array
-  - Required: Yes
-  - Example: [$install_path, $config_path]
+  - Required: No (default: empty array)
+  - Example: ['arg1', 'arg2']
 
-- `$is_lando`: Whether this is a Lando command (affects escaping)
-  - Type: bool
-  - Required: No
-  - Default: false
+- `$command_type`: The type of command to use
+  - Type: string
+  - Required: No (default: 'auto')
+  - Values: 'auto', 'standard', 'lando_php', 'lando_exec', or a custom command
+  - If 'auto', will detect environment and use 'lando_php' or 'standard' accordingly
 
 **Return Value**: String containing the properly formatted command with escaped arguments
 
@@ -557,7 +599,7 @@ function format_php_command( string $php_command, array $arguments, bool $is_lan
 - Adds standard error redirection (2>&1) to capture all output
 - Redirects stderr to stdout with `2>&1` for comprehensive output capture
 
-### `format_mysql_command()`
+### `format_mysql_parameters_and_query()`
 
 **Location**: `/bin/setup-plugin-tests.php`
 
@@ -565,10 +607,15 @@ function format_php_command( string $php_command, array $arguments, bool $is_lan
 ```php
 namespace WP_PHPUnit_Framework;
 
-function format_mysql_command(string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'ssh'): string
+function format_mysql_parameters_and_query(string $host, string $user, string $pass, string $sql, ?string $db = null, string $command_type = 'direct'): string
 ```
 
-**Purpose**: Formats MySQL commands with proper parameters and SQL command. Handles different escaping rules based on the command type (Lando direct, SSH, or direct).
+**Purpose**: Formats MySQL parameters and SQL query (without the mysql executable). This function only handles the parameters and SQL escaping. The actual MySQL executable is added by the `format_mysql_execution()` function.
+
+**Important Distinction**:
+- This function returns: `-h host -u user -ppassword -e 'SELECT * FROM wp_users;'`
+- It does NOT return: `mysql -h host -u user -ppassword -e 'SELECT * FROM wp_users;'`
+- The `format_mysql_execution()` function is responsible for adding the appropriate MySQL executable command
 
 **Parameters**:
 - `$host`: Database host
@@ -941,6 +988,189 @@ This ensures that WP_TESTS_DIR is properly loaded from .env.testing or from envi
 - The script relies on WordPress core files being present at the specified root path
 - Requires a valid wp-config.php file or alternative configuration sources
 
+### `esc_cli()`
+
+**Location**: `/bin/setup-plugin-tests.php`, `/bin/sync-and-test.php`, `/bin/sync-to-wp.php`
+
+**Signature**:
+```php
+function esc_cli(string $text): string
+```
+
+**Purpose**: Escapes a string for CLI output. Currently returns the text unchanged, but provides a consistent API for future CLI output escaping if needed.
+
+**Parameters**:
+- `$text`: Text to escape
+  - Type: string
+  - Required: Yes
+  - Example: 'Command output text'
+
+**Return Value**: The escaped string (currently unchanged from input)
+
+### `find_wordpress_root()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function find_wordpress_root(string $current_dir, int $max_depth = 5): ?string
+```
+
+**Purpose**: Finds the WordPress root directory by looking for wp-config.php file, starting from the current directory and traversing up to a specified maximum depth.
+
+**Parameters**:
+- `$current_dir`: Starting directory to search from
+  - Type: string
+  - Required: Yes
+  - Example: '/home/user/sites/wordpress-site/wp-content/plugins/my-plugin'
+
+- `$max_depth`: Maximum directory depth to search upward
+  - Type: int
+  - Required: No (default: 5)
+  - Example: 3
+
+**Return Value**:
+- Type: string|null
+- WordPress root path if found, null if not found within the specified depth
+
+**Logic Flow**:
+1. Initialize depth counter
+2. While depth is less than max_depth:
+   - Check if wp-config.php exists in the current directory
+   - If found, return the real path of the current directory
+   - Otherwise, move up one directory level and increment depth
+3. Return null if wp-config.php is not found
+
+### `get_wp_config_value()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function get_wp_config_value(string $search_value, string $wp_config_path): ?string
+```
+
+**Purpose**: Extracts a specific configuration value from the WordPress wp-config.php file using regex pattern matching.
+
+**Parameters**:
+- `$search_value`: Config constant name to search for
+  - Type: string
+  - Required: Yes
+  - Example: 'DB_NAME', 'DB_USER', 'DB_PASSWORD'
+
+- `$wp_config_path`: Path to wp-config.php file
+  - Type: string
+  - Required: Yes
+  - Example: '/var/www/html/wp-config.php'
+
+**Return Value**:
+- Type: string|null
+- The extracted configuration value if found, null otherwise
+
+**Logic Flow**:
+1. Check if wp-config.php exists at the specified path
+2. Read the file contents
+3. Use regex to find the define statement for the requested constant
+4. Extract and return the value if found
+5. Return null if not found
+
+### `download_wp_tests()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function download_wp_tests(string $wp_tests_dir): bool
+```
+
+**Purpose**: Downloads and sets up the WordPress test suite from the WordPress develop GitHub repository.
+
+**Parameters**:
+- `$wp_tests_dir`: Directory where tests will be installed
+  - Type: string
+  - Required: Yes
+  - Example: '/path/to/wordpress/wp-content/plugins/my-plugin/tests/phpunit'
+
+**Return Value**:
+- Type: bool
+- True if installation was successful, false otherwise
+
+**Logic Flow**:
+1. Create tests directory if it doesn't exist
+2. Check if test suite is already installed
+3. Create temporary directory for downloading
+4. Clone WordPress develop repository
+5. Copy test files to the target directory
+6. Clean up temporary files
+7. Verify installation was successful
+
+**Error Handling**:
+- Returns false if directory creation fails
+- Returns false if Git clone fails
+- Returns false if file copying fails
+- Returns false if required test files are missing after installation
+
+### `generate_wp_tests_config()`
+
+**Location**: `/bin/setup-plugin-tests.php`
+
+**Signature**:
+```php
+function generate_wp_tests_config(
+    string $wp_tests_dir,
+    string $db_name,
+    string $db_user,
+    string $db_pass,
+    string $db_host,
+    string $table_prefix = 'wptests_'
+): string
+```
+
+**Purpose**: Generates the wp-tests-config.php file required by the WordPress test suite with the specified database settings.
+
+**Parameters**:
+- `$wp_tests_dir`: Directory where tests are installed
+  - Type: string
+  - Required: Yes
+  - Example: '/path/to/wordpress/wp-content/plugins/my-plugin/tests/phpunit'
+
+- `$db_name`: Database name for tests
+  - Type: string
+  - Required: Yes
+  - Example: 'wordpress_test'
+
+- `$db_user`: Database username
+  - Type: string
+  - Required: Yes
+  - Example: 'wordpress'
+
+- `$db_pass`: Database password
+  - Type: string
+  - Required: Yes
+  - Example: 'password'
+
+- `$db_host`: Database host
+  - Type: string
+  - Required: Yes
+  - Example: 'localhost'
+
+- `$table_prefix`: Database table prefix
+  - Type: string
+  - Required: No (default: 'wptests_')
+  - Example: 'wp_test_'
+
+**Return Value**:
+- Type: string
+- Path to the generated config file
+
+**Logic Flow**:
+1. Create the config file content with database settings
+2. Write the content to wp-tests-config.php in the tests directory
+3. Return the path to the created file
+
+**Error Handling**:
+- Throws exception if file cannot be written
+
 ## Bootstrap Files
 
 ### Bootstrap File Relationships
@@ -1109,6 +1339,96 @@ When executing PHP commands in Lando environments, the following considerations 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
 - Test directory: `../tests/Integration`
+
+### `colored_message()`
+
+**Location**: `/bin/sync-and-test.php`
+
+**Signature**:
+```php
+function colored_message(string $message, string $color = 'normal'): void
+```
+
+**Purpose**: Prints a colored message to the console for better visual feedback during test execution.
+
+**Parameters**:
+- `$message`: The message to print
+  - Type: string
+  - Required: Yes
+  - Example: 'Tests completed successfully'
+
+- `$color`: The color to use
+  - Type: string
+  - Required: No (default: 'normal')
+  - Allowed values: 'green', 'yellow', 'red', 'blue', 'normal'
+  - Example: 'green' for success messages, 'red' for errors
+
+**Return Value**: None (void)
+
+**Logic Flow**:
+1. Define color codes for different message types
+2. Select the appropriate color code based on the specified color
+3. Wrap the message with color codes
+4. Output the colored message to the console
+
+### `print_usage()`
+
+**Location**: `/bin/sync-and-test.php`
+
+**Signature**:
+```php
+function print_usage(): void
+```
+
+**Purpose**: Displays usage information for the sync-and-test.php script, showing available command-line options and examples.
+
+**Parameters**: None
+
+**Return Value**: None (void)
+
+**Logic Flow**:
+1. Print script name and purpose
+2. List available command-line options with descriptions
+3. Show usage examples
+
+### `build_phpunit_command()`
+
+**Location**: `/bin/sync-and-test.php`
+
+**Signature**:
+```php
+function build_phpunit_command($config_file, $test_type, $options)
+```
+
+**Purpose**: Constructs the PHPUnit command with appropriate configuration file and options based on the test type.
+
+**Parameters**:
+- `$config_file`: Path to the PHPUnit configuration file
+  - Type: string
+  - Required: Yes
+  - Example: 'phpunit-unit.xml.dist'
+
+- `$test_type`: Type of tests to run
+  - Type: string
+  - Required: Yes
+  - Allowed values: 'unit', 'integration', 'wp-mock'
+  - Example: 'unit'
+
+- `$options`: Additional PHPUnit options
+  - Type: array
+  - Required: Yes
+  - Example: ['--filter=test_format_php_command', '--verbose']
+
+**Return Value**:
+- Type: string
+- The complete PHPUnit command ready for execution
+
+**Logic Flow**:
+1. Start with the base PHPUnit command
+2. Add the configuration file path
+3. Add any specified filter options
+4. Add any additional options
+5. Return the complete command string
 
 ## Test Execution Scripts
 

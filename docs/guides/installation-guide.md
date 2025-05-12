@@ -1,4 +1,4 @@
-# PHPUnit and Testing Tools Installation Guide
+# GL PHPUnit and Testing Tools Installation Guide
 
 This guide provides step-by-step instructions for installing PHPUnit and related testing tools for WordPress plugin development.
 
@@ -63,9 +63,40 @@ With this approach, you'll:
 
 Alternatively, you can develop directly in your WordPress installation's plugins directory, though this is not recommended for the reasons mentioned above.
 
+## Installing This GL WordPress PHPUnit Testing Framework
+
+### Option 1: Git Submodule (Recommended for Contributors)
+
+```bash
+# From your plugin's root directory
+git submodule add https://github.com/glerner/phpunit-testing.git tests/gl-phpunit-test-framework
+```
+
+### Option 2: Composer Package (Recommended for Standard Usage)
+
+```bash
+# From your plugin's root directory
+composer require glerner/phpunit-testing --dev
+```
+
+When you run the setup script later, your composer.json and the installed dependencies will be copied to your WordPress plugin directory.
+
+The next step is to copy composer.json
+> Note: if you already have a composer.json, you should carefully merge what is in this composer.json into your own.
+
+```bash
+cp tests/gl-phpunit-test-framework/composer.json tests/composer.json
+```
+
 ## Installing PHPUnit
 
 PHPUnit is the core testing framework we'll use. We recommend installing it via Composer in your plugin development directory (outside WordPress) as this framework also includes tools that will work before testing in WordPress, such as static code quality tests.
+
+This package requires PHPUnit 9.x due to compatibility requirements with other dependencies.
+
+PHPUnit is installed automatically by this package.
+
+If you wanted to install it manually, you would:
 
 ```bash
 # Navigate to your plugin project directory (outside WordPress)
@@ -75,14 +106,17 @@ cd ~/sites/your-plugin-project
 # This will create or update your composer.json
 composer require --dev phpunit/phpunit ^9.0
 ```
-
-When you run the setup script later, your composer.json and the installed dependencies will be copied to your WordPress plugin directory.
+*Do Not* run the default PHPUnit installation instructions. This package has much better installation, instructions below.
 
 > **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+ and PHP 8.0+, PHPUnit 9.x is recommended.
 
 ## Installing WP_Mock
 
-WP_Mock is a library that provides a framework for mocking WordPress functions and classes:
+This is installed automatically by this package.
+
+WP_Mock is a library that provides a framework for mocking WordPress functions and classes.
+
+If you wanted to install it manually, you would run:
 
 ```bash
 # Add WP_Mock as a dev dependency
@@ -91,7 +125,11 @@ composer require --dev 10up/wp_mock ^0.4
 
 ## Installing Brain\Monkey
 
-Brain\Monkey complements WP_Mock by providing additional mocking capabilities for WordPress functions:
+This is installed automatically by this package.
+
+Brain\Monkey complements WP_Mock by providing additional mocking capabilities for WordPress functions.
+
+If you wanted to install it manually, you would run:
 
 ```bash
 # Add Brain\Monkey as a dev dependency
@@ -110,6 +148,8 @@ For more information on using Brain\Monkey, see the [Mocking Strategies](phpunit
 After adding all the required packages, run `composer update` to ensure all dependencies are properly resolved and installed:
 
 ```bash
+# From your plugin's root directory
+cd tests
 composer update
 ```
 
@@ -117,37 +157,68 @@ This command will update all dependencies to their latest versions according to 
 
 ## Creating the Environment Configuration File
 
-Before setting up the WordPress test library, you should create a `.env.testing` file that contains your environment-specific configuration, if you use other than the default settings. This file is essential for the test framework to locate your WordPress installation and configure the test database.
+The `.env.testing` file holds all environment-specific configuration for running tests. This file is required for the test framework to locate your WordPress installation, set up the test database, and know where your plugin or theme is installed for testing.
+
+> Note: If you are testing multiple plugins and/or themes, you can use the same database, with a different WP_PHPUNIT_TABLE_PREFIX for each.
+
+### 1. Create Your `.env.testing` File
+
+Start by copying the sample file:
 
 ```bash
-# Copy the sample environment file to create your configuration
 cp .env.sample.testing .env.testing
 ```
-Note: If you already have a .env.testing, modify it to include any additional settings you may need.
+> If you already have a `.env.testing`, review and update it to include any new or required settings.
 
-Edit the `.env.testing` file to match your environment. The most important settings are:
+### 2. Configure Database Settings for Tests
 
-### WordPress and Test Library Paths
-- `WP_ROOT`: Path to your WordPress installation (e.g., `/app` in Lando or `/home/username/sites/wordpress` on local machine)
-- `WP_TESTS_DIR`: Path to the WordPress test library where PHPUnit will be installed (normally 'wp-content/plugins/wordpress-develop/tests/phpunit')
-
-### Database Configuration
+Set these variables to match your test database:
 - `WP_TESTS_DB_NAME`: Name of the test database (required by PHPUnit's WordPress testing library, should be `wordpress_test`)
 - `WP_TESTS_DB_USER`: Database username
 - `WP_TESTS_DB_PASSWORD`: Database password
-- `WP_TESTS_DB_HOST`: Database host
+- `WP_TESTS_DB_HOST`: Database host (e.g., `localhost` or `mariadb`)
+- The user, password, host database connection parameters could be the same as for your WordPress database.
+- The test database name *should be different* than the WordPress database name; you will be wiping out the wordpress_test database often when you run the tests.
+- `WP_PHPUNIT_TABLE_PREFIX` Table prefix,
+    - Often `yourplugin_test_` customized for each project you are testing.
+    - Should have a trailing '_'
 
-### PHPUnit Testing Framework Development
-- `FILESYSTEM_WP_ROOT`: Path to WordPress on your local filesystem (without trailing slash)
-- `FRAMEWORK_DEST_NAME`: Name of your plugin's directory in WordPress (your-plugin-name). The full path to your plugin folder will be FILESYSTEM_WP_ROOT/wp-content/plugins/FRAMEWORK_DEST_NAME
+### 3. Configure Plugin/Theme Installation Paths
 
-### Test Configuration
+- `WP_ROOT`: Path to your WordPress installation (e.g., `/app` in Lando or `/home/username/sites/wordpress` on local machine)
+- `FILESYSTEM_WP_ROOT`: Absolute path to your WordPress installation (no trailing slash)
+  - Example: `/home/youruser/sites/wordpress`
+- `FOLDER_IN_WORDPRESS`: Path within WordPress where your code will be installed
+  - Default: `wp-content/plugins` (for plugins)
+  - Alternatives: `wp-content/themes` (for themes), or any custom path
+  - No leading or trailing slashes
+- `YOUR_PLUGIN_SLUG`: Name of your plugin or theme directory (your slug)
+  - Example: `my-awesome-plugin`
+
+- `WP_TESTS_DIR`: Full path to the WordPress test library where PHPUnit will be installed
+    - Will use FILESYSTEM_WP_ROOT/wp-content/plugins/wordpress-develop/tests/phpunit unless specified in .env.testing
+
+
+**Your code will be installed for testing at:**
+```
+${FILESYSTEM_WP_ROOT}/${FOLDER_IN_WORDPRESS}/${YOUR_PLUGIN_SLUG}
+```
+Example:
+```
+/home/youruser/sites/wordpress/wp-content/plugins/my-awesome-plugin
+```
+
+### 4. Additional Test Configuration (Optional)
+
 - `TEST_ERROR_LOG`: Path to error log file
 - `PHP_MEMORY_LIMIT`: Memory limit for PHP during tests
 - `COVERAGE_REPORT_PATH`: Path for coverage reports
 - `CLOVER_REPORT_PATH`: Path for Clover XML reports
 
-For Lando environments, you'll typically use:
+Refer to `.env.sample.testing` for all available settings and further examples.
+
+
+## For Lando environments, you'll typically use:
 
 ```
 # WordPress paths within container
@@ -159,12 +230,6 @@ WP_TESTS_DB_NAME=wordpress_test
 WP_TESTS_DB_USER=wordpress
 WP_TESTS_DB_PASSWORD=wordpress
 WP_TESTS_DB_HOST=database
-
-# Path to your WordPress installation (without trailing slash)
-FILESYSTEM_WP_ROOT=/home/username/sites/wordpress  # Your local path, not container path
-
-# Your plugin's directory name in WordPress
-FRAMEWORK_DEST_NAME=your-plugin-name
 
 # Test configuration
 TEST_ERROR_LOG=/tmp/phpunit-testing-error.log
@@ -189,14 +254,6 @@ Before running the script, make sure your `.env.testing` file has the correct `S
 # - SSH_COMMAND=yourcommand   # Whatever command you need for your specific environment
 
 ```
-
-If your plugin directory doesn't exist yet in WordPress, create it with:
-
-```bash
-composer sync:wp
-```
-
-This will copy your plugin files to WordPress
 
 Then run the setup script from your plugin development directory. This will install the test framework in your WordPress plugin directory:
 ```bash
@@ -348,16 +405,7 @@ WP_TESTS_DB_NAME=wordpress_test
 
 Follow these steps for normal plugin development:
 
-1. Configure your `.env.testing` file with the correct WordPress path:
-
-```
-# The path to your WordPress installation
-FILESYSTEM_WP_ROOT=/home/username/sites/wordpress
-
-# The name of your plugin's directory in WordPress
-# wp-content/plugins/your-plugin-name
-FRAMEWORK_DEST_NAME=your-plugin-name
-```
+1. Configure your `.env.testing` file with the correct WordPress paths, as covered above.
 
 2. Sync your plugin files to WordPress and set up the test suite:
 
@@ -502,43 +550,45 @@ If you're developing the framework itself, you'll need to sync your development 
 
 ```bash
 # Set folder paths
-DEV_FOLDER=~/sites/phpunit-testing                         # Development folder (outside WordPress)
+DEV_FOLDER=~/sites/phpunit-testing  # Development folder (outside WordPress)
 WP_PLUGIN_FOLDER=~/sites/wordpress/wp-content/plugins/gl-phpunit-testing-framework  # WordPress plugin folder
 
 # Create/update .env.testing in the development folder
-cp $DEV_FOLDER/.env.sample.testing $DEV_FOLDER/.env.testing
-# Edit .env.testing to set your specific paths:
-#
-# FILESYSTEM_WP_ROOT=/home/username/sites/wordpress        # Path to WordPress root (no trailing slash)
-# FRAMEWORK_DEST_NAME=gl-phpunit-testing-framework         # Plugin folder name in WordPress
+# Important: If you already have a .env.testing file, modify it to include any additional settings you may need; do not simply replace it.
+
+# Edit .env.testing to set your specific paths
 
 # Run the sync script from the development folder
 cd $DEV_FOLDER
-php bin/sync-to-wp.php                                     # Syncs to WordPress plugin folder
 
-# Now switch to the WordPress plugin folder for testing
-cd $WP_PLUGIN_FOLDER
-# The sync script copies files to FILESYSTEM_WP_ROOT/wp-content/plugins/FRAMEWORK_DEST_NAME
+# Run the setup script, always from your development folder
+php bin/setup-plugin-tests.php
+
+php bin/sync-to-wp.php  # Syncs to WordPress plugin folder
+# The sync script copies files to FILESYSTEM_WP_ROOT/FOLDER_IN_WORDPRESS/YOUR_PLUGIN_SLUG
 
 # After syncing, you'll need a .env.testing file in the WordPress plugin folder too
 # (The sync script doesn't copy .env.testing to maintain separate configurations)
-cp $WP_PLUGIN_FOLDER/.env.sample.testing $WP_PLUGIN_FOLDER/.env.testing
+cp $DEV_FOLDER/.env.testing $WP_PLUGIN_FOLDER/.env.testing
 # Edit this file to set appropriate paths for the WordPress environment
+
+# Now switch to the WordPress plugin folder for refreshing Composer
+cd $WP_PLUGIN_FOLDER
 
 # Clean and update dependencies
 rm -rf vendor/ composer.lock .phpunit.result.cache
 composer update
 
-# Run the setup script inside SSH
-lando ssh  # or ssh for non-Lando environments
+# Run tests
+cd $WP_PLUGIN_FOLDER
+composer test
+composer test:unit
+composer test:wp-mock
+composer test:integration
 
-## Within SSH
-# Navigate to your plugin directory (if not already there)
-# Note: Inside Lando, /app is the WordPress root
-cd /app/wp-content/plugins/gl-phpunit-testing-framework  # Path inside container
-
-# Run the setup script
-php bin/setup-plugin-tests.php
+# or
+cd $DEV_FOLDER
+php bin/sync-and-test.php
 ```
 
 ## Troubleshooting

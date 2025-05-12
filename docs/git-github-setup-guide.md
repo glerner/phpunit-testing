@@ -25,6 +25,12 @@ This guide walks through the process of creating a local Git repository and conn
    git status
 
    git add .
+   # or with list of files added
+   git add . --verbose
+   ```
+   - The '.' is to add all files. Instead of all files, you can add specific files:
+   ```bash
+   git add filename1 filename2
    ```
    - Tip: Always run `git status` before `git add .` to verify what will be added
 
@@ -51,7 +57,7 @@ This guide walks through the process of creating a local Git repository and conn
 3. Name your repository (use the same name as your local project for clarity)
 4. Add an optional description
 5. Choose public or private visibility
-6. **Do not** initialize with README, license, or .gitignore (since we already have a local repository)
+6. **Do not** initialize with README, license, or .gitignore (since we already have a local repository, create locally)
 7. Click "Create repository"
 
 ## Connecting Local Repository to GitHub
@@ -134,7 +140,8 @@ This guide walks through the process of creating a local Git repository and conn
 
    #### Global Settings (in `~/.gitconfig`)
 
-   These settings should be applied globally as they apply to all repositories:
+   These settings should be applied globally as they apply to all repositories.
+   Run these from your Shell or Bash:
 
    ```bash
    # Identity settings

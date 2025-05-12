@@ -8,6 +8,14 @@ When system updates affect Docker, you may need to completely rebuild your Docke
 
 ### Basic Docker Cleanup
 
+First, Lando will need to be destroyed. Lando will later be rebuilt.
+
+```bash
+lando poweroff
+lando destroy -y
+```
+
+Next, Docker will need to be cleaned up.
 ```bash
 # Stop all running containers
 docker stop $(docker ps -a -q)
@@ -48,17 +56,29 @@ After Docker is cleaned up and restarted, rebuild your Lando environment:
 # Navigate to your WordPress directory
 cd /path/to/wordpress
 
-# Destroy the existing Lando app
-lando destroy -y
+# Rebuild the existing Lando app
+lando rebuild -y
 
-# Note: When you run 'lando destroy', it will download all packages
+# Note: When you run 'lando rebuild', it will download all packages
 # and rebuild everything from scratch. This process can take several minutes.
 
-# if lando destroy didn't start it:
-# lando start
+# if lando rebuild didn't start it:
+lando start
 ```
 
 Wait for Lando to complete the startup process. You should see successful connection messages for all services.
+
+## Install WordPress site data from MySQL file
+
+```bash
+# Navigate to your WordPress directory
+cd /path/to/wordpress
+
+# Install WordPress site data from MySQL file
+lando db-import /app/path/to/wordpress.sql
+# lando db-import /app/lc-database-2025-04-19.sql
+
+```
 
 ## Rebuilding Composer Environment
 

@@ -325,10 +325,33 @@ Lando provides direct access to MySQL for executing database queries. Here's how
 ### Lando MySQL Syntax
 
 ```bash
-lando mysql -h host -u user -ppassword database -e 'SQL QUERY;'
+lando mysql -h host -u user -ppassword database -e "SQL QUERY;"
+
+# Also valid, but above is preferred in this project:
+lando mysql -h localhost -u root -ppassword -e 'SELECT * FROM wp_users;'
+lando mysql -h 'localhost' -u 'root' -p'password' -e 'SELECT * FROM wp_users;'
+
 ```
+- There must be no space between -p and the password: use -ppassword, not -p password.
+
+- Quotes around host, user, and password are not required unless the value contains spaces or special characters. For typical values (e.g., localhost, root, password), quoting is optional but harmless.
+
+- The SQL query should always be quoted (with single or double quotes) to prevent shell interpretation issues, especially if the query contains spaces, semicolons, or special characters.
 
 This approach directly executes MySQL within the Lando container. Note that there is no space between `-p` and the password.
+
+
+#### When to Quote or Escape MySQL Parameters
+
+- **Host, user, password:** Only quote if the value contains spaces or shell-special characters.
+  - Example: `-u 'my user' -p'my pa$$word'`
+
+- **SQL query (`-e`):** Always quote the query. Use single or double quotes, but be consistent and avoid conflicts with quotes inside the query.
+
+- **Escaping inside SQL:** If your SQL query contains single quotes and you are using single quotes to wrap the query, escape internal single quotes (e.g., `-e 'SELECT * FROM users WHERE name=\'O\'Reilly\';'`).
+
+**General rule:**
+For "normal" parameters (no spaces or special characters), quoting is not required for host, user, or password, but is required for the SQL query.
 
 ### Formatting MySQL Commands in PHP
 
@@ -416,6 +439,38 @@ exec("$cmd 2>&1", $output, $return_var);
 4. **Shell Error Redirection**: As with PHP commands, add `2>&1` outside the command string
 5. **Working Directory**: Commands must be run from the WordPress root directory or a subfolder
 6. **Command Quoting**: Quote arguments properly, especially those that might contain spaces
+
+## File Verification in Lando Containers
+
+When you need to check if files exist within a Lando container, there are two main approaches:
+
+### 1. Using `lando php` (Recommended)
+
+The `lando php` command is the simplest and most reliable way to check for files in the container:
+
+```bash
+# Simple file existence check using lando php
+lando php -r "echo file_exists('/app/wp-content/plugins/my-plugin/file.php') ? 'File exists' : 'File not found';"
+
+# Check multiple files with a single command
+lando php -r "if (file_exists('/app/wp-content/plugins/wordpress-develop/tests/phpunit/includes/install.php')) { echo 'install.php: Found\n'; } else { echo 'install.php: Not found\n'; } if (file_exists('/app/wp-content/plugins/wordpress-develop/tests/phpunit/wp-tests-config.php')) { echo 'wp-tests-config.php: Found\n'; } else { echo 'wp-tests-config.php: Not found\n'; }"
+```
+
+### 2. Using `lando ssh`
+
+You can use `lando ssh` for very simple commands, but it becomes problematic for anything requiring escaping:
+
+```bash
+# Simple version check - works reliably
+lando ssh -c 'php -v'
+
+# Simple file listing - works reliably
+lando ssh -c 'ls -la /app/wp-content/plugins/'
+```
+
+### ⚠️ Warning About Complex Commands
+
+Attempting to use bash conditionals or complex PHP code within `lando ssh -c` commands leads to extremely difficult escaping issues that are nearly impossible to get right consistently. **For file verification and any conditional logic, always use `lando php` instead.**
 
 ## Summary of Best Practices
 
