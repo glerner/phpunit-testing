@@ -20,8 +20,16 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bin;
 
-// Include framework functions
-require_once dirname(__DIR__) . '/tests/framework/framework-functions.php';
+/* Define script constants as namespace constants
+ * SCRIPT_DIR should be your-plugin/tests/bin
+ * PROJECT_DIR should be your-plugin
+*/
+define('SCRIPT_DIR', __DIR__);
+define('PROJECT_DIR', dirname(dirname(__DIR__)));
+
+// Include the framework utility functions
+require_once SCRIPT_DIR . '/framework-functions.php';
+
 
 use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
@@ -33,9 +41,8 @@ $env_file = dirname(__DIR__) . '/.env.testing';
 global $loaded_settings;
 $loaded_settings = load_settings_file($env_file);
 
-
 // Define paths from settings
-$framework_source = get_setting('FRAMEWORK_SOURCE', dirname(__DIR__));
+$plugin_folder = get_setting('PLUGIN_FOLDER', dirname(__DIR__));
 
 // FILESYSTEM_WP_ROOT is required - no default fallback
 $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
@@ -46,27 +53,28 @@ if (empty($filesystem_wp_root)) {
 }
 
 // Get plugin slug and folder path from settings
-$framework_dest_name = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
+$your_plugin_slug = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
 $folder_in_wordpress = \WP_PHPUnit_Framework\get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
-$framework_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $framework_dest_name;
+$your_plugin_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $your_plugin_slug;
 
 echo esc_cli("Using paths:\n");
-echo esc_cli("  Framework source: $framework_source\n");
+echo esc_cli("  Plugin Folder: $plugin_folder\n");
 echo esc_cli("  WordPress root: $filesystem_wp_root\n");
-echo esc_cli("  Framework destination: $framework_dest\n");
+echo esc_cli("  Plugin destination: $your_plugin_dest\n");
 
 // Ensure vendor directory exists in source
-if (!is_dir("$framework_source/vendor")) {
+// This is a reason are requiring tests be in $plugin_folder/tests
+if (!is_dir("$plugin_folder/tests/vendor")) {
     echo esc_cli("Installing composer dependencies in source...\n");
-    chdir($framework_source);
+    chdir($plugin_folder . '/tests' );
     exec('composer install');
 }
 
 // Create destination directory if it doesn't exist
 // Note: This might fail if we don't have permissions, but rsync will handle this case
-if (!is_dir($framework_dest)) {
-    @mkdir($framework_dest, 0755, true);
-    if (!is_dir($framework_dest)) {
+if (!is_dir($your_plugin_dest)) {
+    @mkdir($your_plugin_dest, 0755, true);
+    if (!is_dir($your_plugin_dest)) {
         echo esc_cli("Warning: Could not create destination directory. This might be a permissions issue.\n");
         echo esc_cli("If using Lando, you may need to run this command within the Lando environment.\n");
     }
@@ -90,8 +98,9 @@ foreach ($rsync_exclude as $exclude) {
     $exclude_params .= " --exclude='$exclude'";
 }
 
-// Sync framework files to WordPress plugins directory
-$rsync_cmd = "rsync -av --delete $exclude_params '$framework_source/' '$framework_dest/'";
+// Sync project files to WordPress plugins directory
+chdir($plugin_folder);
+$rsync_cmd = "rsync -av --delete $exclude_params '$plugin_folder/' '$your_plugin_dest/'";
 echo esc_cli("Syncing framework files...\n");
 echo esc_cli("Command: $rsync_cmd\n");
 exec($rsync_cmd, $output, $return_var);
@@ -100,19 +109,23 @@ if ($return_var !== 0) {
     echo esc_cli("Error syncing framework files. rsync exited with code $return_var\n");
     echo esc_cli("This might be due to permission issues or the destination directory not existing.\n");
     echo esc_cli("If using Lando, try running this command inside the Lando environment:\n");
-    echo esc_cli("  lando ssh -c 'mkdir -p $framework_dest && cd /app && php /app/wp-content/plugins/gl-phpunit-testing-framework/bin/sync-to-wp.php'\n");
+    echo esc_cli("  lando ssh -c 'mkdir -p $your_plugin_dest && cd /app && php /app/wp-content/plugins/gl-phpunit-testing-framework/bin/sync-to-wp.php'\n");
     exit(1);
 }
 
 // Copy vendor directory separately to preserve symlinks
-if (is_dir("$framework_source/vendor")) {
+if (is_dir("$plugin_folder/tests/vendor")) {
     echo esc_cli("Syncing vendor directory...\n");
-    $vendor_cmd = "rsync -av --delete '$framework_source/vendor/' '$framework_dest/vendor/'";
+    error_log("Syncing vendor directory... $plugin_folder/tests/vendor/ to $your_plugin_dest/tests/vendor/", 3, '/tmp/phpunit-settings-debug.log');
+
+    $vendor_cmd = "rsync -av --delete '$plugin_folder/tests/vendor/' '$your_plugin_dest/tests/vendor/'";
+    chdir($plugin_folder);
     exec($vendor_cmd);
 }
 
 // Run composer dump-autoload in the destination directory
-chdir($framework_dest);
+// composer.json for testing programs is in tests/composer.json
+chdir($your_plugin_dest . '/tests' );
 echo esc_cli("Regenerating autoloader files...\n");
 exec('composer dump-autoload');
 
@@ -120,9 +133,9 @@ exec('composer dump-autoload');
 // Example: php bin/setup-plugin-tests.php
 
 // Return to framework destination directory
-echo esc_cli("Framework files synced to: $framework_dest\n");
+echo esc_cli("Plugin files synced to: $your_plugin_dest\n");
 echo esc_cli("Done (if all went well).\n");
-chdir($framework_dest);
+chdir($your_plugin_dest);
 
 // Instructions for running tests
 echo esc_cli("\nTo run integration tests:\n");

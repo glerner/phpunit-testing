@@ -59,6 +59,7 @@ test_analysis_results*.txt
 .env
 .env.*
 !.env.sample.testing
+**/php.ini
 
 # Temporary files
 *.log

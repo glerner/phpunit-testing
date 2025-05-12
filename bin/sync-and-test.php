@@ -27,8 +27,15 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bin;
 
-// Include framework functions
-require_once dirname(__DIR__) . '/tests/framework/framework-functions.php';
+/* Define script constants as namespace constants
+ * SCRIPT_DIR should be your-plugin/tests/bin
+ * PROJECT_DIR should be your-plugin
+*/
+define('SCRIPT_DIR', __DIR__);
+define('PROJECT_DIR', dirname(dirname(__DIR__)));
+
+// Include the framework utility functions
+require_once SCRIPT_DIR . '/framework-functions.php';
 
 use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
@@ -125,13 +132,13 @@ if ($options['help'] || (!$options['unit'] && !$options['wp-mock'] && !$options[
 }
 
 // Load settings from .env.testing
-$env_file = dirname(__DIR__) . '/.env.testing';
+
+$env_file = PROJECT_DIR . '/tests/.env.testing';
 colored_message("Loading settings from .env.testing...", 'blue');
 global $loaded_settings;
 $loaded_settings = load_settings_file($env_file);
 
 // Define paths from settings
-$framework_source = get_setting('FRAMEWORK_SOURCE', dirname(__DIR__));
 
 // FILESYSTEM_WP_ROOT is required - no default fallback
 $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
@@ -141,37 +148,36 @@ if (empty($filesystem_wp_root)) {
 	exit(1);
 }
 
-// Get plugin slug and folder path from settings
-$framework_dest_name = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
+$your_plugin_slug = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
 $folder_in_wordpress = \WP_PHPUnit_Framework\get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
-$framework_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $framework_dest_name;
+$your_plugin_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $your_plugin_slug;
 
 colored_message("Using paths:", 'blue');
-echo esc_cli("  Framework source: $framework_source\n");
-echo esc_cli("  WordPress root: $filesystem_wp_root\n");
-echo esc_cli("  Framework destination: $framework_dest\n");
+echo esc_cli("  Project source: " . PROJECT_DIR . "\n");
+echo esc_cli("  WordPress root: " . $filesystem_wp_root . "\n");
+echo esc_cli("  Project destination: " . $your_plugin_dest . "\n");
 
 // Step 1: Sync plugin to WordPress
-colored_message("\nStep 1: Syncing plugin to WordPress...", 'green');
+colored_message("\nStep 1: Syncing project to WordPress...", 'green');
 
 // Ensure vendor directory exists in source
-if (!is_dir("$framework_source/vendor")) {
+if (!is_dir(PROJECT_DIR . '/tests/vendor')) {
 	colored_message("Installing composer dependencies in source...", 'yellow');
-	chdir($framework_source);
+	chdir(PROJECT_DIR . '/tests');
 	exec('composer install');
 }
 
 // Create destination directory if it doesn't exist
-if (!is_dir($framework_dest)) {
-	@mkdir($framework_dest, 0755, true);
-	if (!is_dir($framework_dest)) {
+if (!is_dir($your_plugin_dest)) {
+	@mkdir($your_plugin_dest, 0755, true);
+	if (!is_dir($your_plugin_dest)) {
 		colored_message("Warning: Could not create destination directory. This might be a permissions issue.", 'yellow');
 		colored_message("If using Lando, you may need to run this command within the Lando environment.", 'yellow');
 	}
 }
 
 // Call the existing sync-to-wp.php script
-$sync_script = dirname(__FILE__) . '/sync-to-wp.php';
+$sync_script = SCRIPT_DIR . '/sync-to-wp.php';
 if (!file_exists($sync_script)) {
 	colored_message("Error: Could not find sync-to-wp.php script at $sync_script", 'red');
 	exit(1);
@@ -192,8 +198,8 @@ if ($sync_return !== 0) {
 
 // Step 2: Change to the WordPress plugin directory
 colored_message("\nStep 2: Changing to WordPress plugin directory...", 'green');
-if (!chdir($framework_dest)) {
-	colored_message("Error: Could not change to WordPress plugin directory: $framework_dest", 'red');
+if (!chdir($your_plugin_dest)) {
+	colored_message("Error: Could not change to WordPress plugin directory: $your_plugin_dest", 'red');
 	exit(1);
 }
 colored_message("Current directory: " . getcwd(), 'blue');
@@ -291,7 +297,7 @@ if ($phpunit_return === 0) {
 
 	// Show coverage report path if generated
 	if ($options['coverage']) {
-		$coverage_path = $framework_dest . '/build/coverage/index.html';
+		$coverage_path = $plugin_dest . '/build/coverage/index.html';
 		colored_message("Code coverage report is available at:", 'blue');
 		colored_message($coverage_path, 'yellow');
 		colored_message("You can view this report by opening it in a web browser.", 'blue');

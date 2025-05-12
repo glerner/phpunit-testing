@@ -19,7 +19,8 @@ ini_set('display_errors', '1');
 
 // First, include the framework-functions.php to get access to the load_settings_file function
 // and any other functions that stubs might depend on
-require_once dirname(__DIR__) . '/framework/framework-functions.php';
+// Include the framework utility functions
+require_once dirname(__DIR__) . '/bin/framework-functions.php';
 
 // Load only the WP_UnitTestCase stub which is needed for all framework tests
 // Other stubs are loaded on demand in specific tests

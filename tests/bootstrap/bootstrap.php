@@ -13,6 +13,9 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+// Include the framework utility functions
+require_once dirname(__DIR__) . '/bin/framework-functions.php';
+
 // Display initialization information
 echo "\n=== WordPress PHPUnit Testing Framework Bootstrap ===\n";
 echo "\n=== Phase 1: Composer Autoloader ===\n";

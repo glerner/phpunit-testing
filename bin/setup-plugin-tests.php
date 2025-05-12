@@ -22,8 +22,15 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework;
 
+/* Define script constants as namespace constants
+ * SCRIPT_DIR should be your-plugin/tests/bin
+ * PROJECT_DIR should be your-plugin
+*/
+define('SCRIPT_DIR', __DIR__);
+define('PROJECT_DIR', dirname(dirname(__DIR__)));
+
 // Include the framework utility functions
-require_once dirname(__DIR__) . '/tests/framework/framework-functions.php';
+require_once SCRIPT_DIR . '/framework-functions.php';
 
 // Exit if accessed directly, should be run command line
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
@@ -34,12 +41,8 @@ if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-// Define script constants as namespace constants
-const SCRIPT_DIR = __DIR__;
-const PROJECT_DIR = __DIR__ . '/..';
-
 // Load settings from .env.testing
-$env_file_path = dirname(__DIR__) . '/.env.testing';
+$env_file_path = PROJECT_DIR . '/tests/.env.testing';
 $loaded_settings = load_settings_file($env_file_path);
 
 /**
@@ -632,6 +635,64 @@ if ($show_help) {
 // Store original directory for later restoration
 $original_dir = getcwd();
 
+/* Copy common command files for developer's convenience
+ * from PROJECT_DIR/tests/gl-phpunit-test-framework/bin/
+ * phpcbf.sh  sync-and-test.php  sync-to-wp.php
+ * to PROJECT_DIR/bin/
+ */
+
+$framework_bin_dir = PROJECT_DIR . '/tests/gl-phpunit-test-framework/bin';
+$project_bin_dir = PROJECT_DIR . '/bin';
+
+// Ensure PROJECT_DIR/bin exists
+if (!is_dir($project_bin_dir)) {
+	if (!mkdir($project_bin_dir, 0775, true) && !is_dir($project_bin_dir)) {
+		fwrite(STDERR, "Failed to create directory: $project_bin_dir\n");
+		exit(1);
+	}
+}
+
+$bin_files = ['phpcbf.sh', 'sync-and-test.php', 'sync-to-wp.php'];
+foreach ($bin_files as $file) {
+	$src = $framework_bin_dir . '/' . $file;
+	$dest = $project_bin_dir . '/' . $file;
+	if (file_exists($src)) {
+		if (!copy($src, $dest)) {
+			fwrite(STDERR, "Failed to copy $src to $dest\n");
+		} else {
+			chmod($dest, 0755); // Make executable
+		}
+	}
+}
+
+// Copy framework bootstrap files to PROJECT_DIR/tests/bootstrap/
+$framework_bootstrap_dir = PROJECT_DIR . '/tests/gl-phpunit-test-framework/tests/bootstrap';
+$project_bootstrap_dir = PROJECT_DIR . '/tests/bootstrap';
+
+// Ensure PROJECT_DIR/tests/bootstrap exists
+if (!is_dir($project_bootstrap_dir)) {
+	if (!mkdir($project_bootstrap_dir, 0775, true) && !is_dir($project_bootstrap_dir)) {
+		fwrite(STDERR, "Failed to create directory: $project_bootstrap_dir\n");
+		exit(1);
+	}
+}
+
+$bootstrap_files = [
+	'bootstrap-integration.php',
+	'bootstrap.php',
+	'bootstrap-unit.php',
+	'bootstrap-wp-mock.php',
+];
+foreach ($bootstrap_files as $file) {
+	$src = $framework_bootstrap_dir . '/' . $file;
+	$dest = $project_bootstrap_dir . '/' . $file;
+	if (file_exists($src)) {
+		if (!copy($src, $dest)) {
+			fwrite(STDERR, "Failed to copy $src to $dest\n");
+		}
+	}
+}
+
 // Get WordPress root directory from settings
 $wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
 
@@ -692,8 +753,8 @@ $lando_info_array = get_lando_info();
 $wp_db_settings = get_database_settings($wp_config_path, $lando_info_array);
 
 // Get custom PHPUnit database settings from environment variables
-$test_db_name = get_setting('WP_PHPUNIT_DB_NAME', null);
-$test_table_prefix = get_setting('WP_PHPUNIT_TABLE_PREFIX', null);
+$test_db_name = get_setting('WP_TESTS_DB_NAME', null);
+$test_table_prefix = get_setting('WP_TESTS_TABLE_PREFIX', null);
 
 // Get PHPUnit database settings
 $phpunit_db_settings = get_phpunit_database_settings($wp_db_settings, $test_db_name, $test_table_prefix);
@@ -727,7 +788,7 @@ echo "  - Filesystem path: $filesystem_wp_root\n";
 
 // Set up WordPress test suite directory
 // Always use the detected WordPress root to build the test directory path
-$wp_tests_dir = "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit";
+$wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit");
 // echo "Using WordPress test directory: $wp_tests_dir\n";
 
 // If --remove-all flag is set, remove test suite and exit
