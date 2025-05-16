@@ -22,12 +22,44 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework;
 
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
 /* Define script constants as namespace constants
  * SCRIPT_DIR should be your-plugin/tests/bin
  * PROJECT_DIR should be your-plugin
 */
 define('SCRIPT_DIR', __DIR__);
-define('PROJECT_DIR', dirname(dirname(__DIR__)));
+define('PROJECT_DIR', dirname(SCRIPT_DIR,2);
+
+// Source directories (from project root)
+$framework_bin_source    = PROJECT_DIR . '/tests/gl-phpunit-test-framework/bin';
+$framework_config_source = PROJECT_DIR . '/tests/gl-phpunit-test-framework/config';
+
+// Destination directories (from project root)
+$dest_bin_dir    = PROJECT_DIR . '/tests/bin';
+$dest_config_dir = PROJECT_DIR . '/tests/config';
+
+// Ensure destination directories exist
+if (!is_dir($dest_bin_dir)) {
+    mkdir($dest_bin_dir, 0755, true);
+}
+if (!is_dir($dest_config_dir)) {
+    mkdir($dest_config_dir, 0755, true);
+}
+
+// Copy bin scripts (excluding setup-plugin-tests.php itself)
+foreach (['framework-functions.php', 'phpcbf.sh', 'sync-and-test.php', 'sync-to-wp.php'] as $file) {
+    copy("$framework_bin_source/$file", "$dest_bin_dir/$file");
+}
+
+// Optionally copy config files
+foreach (glob("$framework_config_source/*.xml.dist") as $config_file) {
+    $dest = $dest_config_dir . '/' . basename($config_file);
+    copy($config_file, $dest);
+}
 
 // Include the framework utility functions
 require_once SCRIPT_DIR . '/framework-functions.php';
@@ -44,6 +76,9 @@ ini_set('display_errors', '1');
 // Load settings from .env.testing
 $env_file_path = PROJECT_DIR . '/tests/.env.testing';
 $loaded_settings = load_settings_file($env_file_path);
+
+$test_error_log = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
+
 
 /**
  * Check system requirements
@@ -314,6 +349,7 @@ function install_test_suite(
 
     echo COLOR_GREEN . '✅ MySQL connection successful' . COLOR_RESET . "\n";
 
+    /* for now, commenting out for testing multiple plugin capability
     // Try to drop database if exists
     echo "Attempting to drop existing database...\n";
 
@@ -337,6 +373,9 @@ function install_test_suite(
     } else {
         echo COLOR_GREEN . '✅ Existing database dropped (if it existed)' . COLOR_RESET . "\n";
     }
+
+    end testing
+    */
 
     // Create database and grant permissions
 
@@ -635,64 +674,6 @@ if ($show_help) {
 // Store original directory for later restoration
 $original_dir = getcwd();
 
-/* Copy common command files for developer's convenience
- * from PROJECT_DIR/tests/gl-phpunit-test-framework/bin/
- * phpcbf.sh  sync-and-test.php  sync-to-wp.php
- * to PROJECT_DIR/bin/
- */
-
-$framework_bin_dir = PROJECT_DIR . '/tests/gl-phpunit-test-framework/bin';
-$project_bin_dir = PROJECT_DIR . '/bin';
-
-// Ensure PROJECT_DIR/bin exists
-if (!is_dir($project_bin_dir)) {
-	if (!mkdir($project_bin_dir, 0775, true) && !is_dir($project_bin_dir)) {
-		fwrite(STDERR, "Failed to create directory: $project_bin_dir\n");
-		exit(1);
-	}
-}
-
-$bin_files = ['phpcbf.sh', 'sync-and-test.php', 'sync-to-wp.php'];
-foreach ($bin_files as $file) {
-	$src = $framework_bin_dir . '/' . $file;
-	$dest = $project_bin_dir . '/' . $file;
-	if (file_exists($src)) {
-		if (!copy($src, $dest)) {
-			fwrite(STDERR, "Failed to copy $src to $dest\n");
-		} else {
-			chmod($dest, 0755); // Make executable
-		}
-	}
-}
-
-// Copy framework bootstrap files to PROJECT_DIR/tests/bootstrap/
-$framework_bootstrap_dir = PROJECT_DIR . '/tests/gl-phpunit-test-framework/tests/bootstrap';
-$project_bootstrap_dir = PROJECT_DIR . '/tests/bootstrap';
-
-// Ensure PROJECT_DIR/tests/bootstrap exists
-if (!is_dir($project_bootstrap_dir)) {
-	if (!mkdir($project_bootstrap_dir, 0775, true) && !is_dir($project_bootstrap_dir)) {
-		fwrite(STDERR, "Failed to create directory: $project_bootstrap_dir\n");
-		exit(1);
-	}
-}
-
-$bootstrap_files = [
-	'bootstrap-integration.php',
-	'bootstrap.php',
-	'bootstrap-unit.php',
-	'bootstrap-wp-mock.php',
-];
-foreach ($bootstrap_files as $file) {
-	$src = $framework_bootstrap_dir . '/' . $file;
-	$dest = $project_bootstrap_dir . '/' . $file;
-	if (file_exists($src)) {
-		if (!copy($src, $dest)) {
-			fwrite(STDERR, "Failed to copy $src to $dest\n");
-		}
-	}
-}
-
 // Get WordPress root directory from settings
 $wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
 
@@ -789,6 +770,20 @@ echo "  - Filesystem path: $filesystem_wp_root\n";
 // Set up WordPress test suite directory
 // Always use the detected WordPress root to build the test directory path
 $wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit");
+/* Other locations possible, but *always* put the location in WP_TESTS_DIR:
+    // As installed by setup-plugin-tests.php
+    $filesystem_wp_root . '/wp-content/plugins/wordpress-develop/tests/phpunit',
+    // As installed by composer wordpress-dev package
+    $filesystem_wp_root . '/vendor/wordpress/wordpress-develop/tests/phpunit',
+    // As installed via wp-cli scaffold
+    // https://developer.wordpress.org/cli/commands/scaffold/plugin-tests/
+    $filesystem_wp_root . '/wp-content/plugins/wordpress-develop/tests/phpunit',
+    // Standard locations
+    '/tmp/wordpress-tests-lib',
+    '/var/www/wordpress-develop/tests/phpunit',
+    '/wordpress-develop/tests/phpunit',
+*/
+
 // echo "Using WordPress test directory: $wp_tests_dir\n";
 
 // If --remove-all flag is set, remove test suite and exit
@@ -813,14 +808,14 @@ if (!generate_wp_tests_config($wp_tests_dir, $wp_root, $db_name, $db_user, $db_p
 }
 
 // Create build directories for test coverage reports
-echo "Creating build directories for test coverage in $plugin_dir\n";
-$build_dirs = array( "$plugin_dir/build/logs", "$plugin_dir/build/coverage" );
+echo "Creating build directories for test coverage in $plugin_dir/tests\n";
+$build_dirs = array( "$plugin_dir/tests/build/logs", "$plugin_dir/tests/build/coverage" );
 foreach ($build_dirs as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0777, true);
     }
 }
-system("chmod -R 777 $plugin_dir/build");
+system("chmod -R 777 $plugin_dir/tests/build");
 
 // Install test suite
 if (!install_test_suite($wp_tests_dir, $db_name, $db_user, $db_pass, $db_host)) {

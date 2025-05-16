@@ -66,7 +66,13 @@ function get_setting( string $name, mixed $default = null ): mixed {
     if (isset($loaded_settings[ $name ])) {
         return $loaded_settings[ $name ];
     }
-    $error_log_file = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing-error.log');
+
+    /* Don't recursively set, if there is an error
+    $error_log_file = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
+    */
+    if (!isset($error_log_file)) {
+        $error_log_file = '/tmp/phpunit-testing.log';
+    }
 
     // Silently log critical setting issues to error log without screen output
     if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
@@ -80,6 +86,66 @@ function get_setting( string $name, mixed $default = null ): mixed {
     // Return default if not found
     return $default;
 }
+
+/**
+ * Utility: trim_folder_settings
+ *
+ * This function trims leading/trailing slashes and whitespace from folder/path settings.
+ * Customize the list of settings to trim for your project.
+ *
+ * Usage: Call this after loading settings, before using them to build paths.
+ *
+ * @param array $settings Associative array of settings (e.g., from get_setting or load_settings_file)
+ * @return array Trimmed settings array
+ */
+function trim_folder_settings(array $settings): array {
+	$settings_to_trim = [
+		'WP_ROOT',
+		'FILESYSTEM_WP_ROOT',
+		'FOLDER_IN_WORDPRESS',
+		'YOUR_PLUGIN_SLUG',
+		'PLUGIN_FOLDER',
+		// Add/remove settings here as needed for your project structure
+	];
+
+	foreach ($settings_to_trim as $key) {
+		if (isset($settings[$key])) {
+			$settings[$key] = trim($settings[$key], " \/");
+		}
+	}
+	return $settings;
+}
+
+/**
+ * Joins multiple path segments into a single normalized path.
+ * Trims leading/trailing slashes and whitespace from each segment, except preserves leading slash if first argument is absolute.
+ *
+ * Usage: $path = make_path($wp_root, $folder_in_wordpress, $your_plugin_slug, 'tests');
+ *
+ * @param string ...$segments Path segments to join
+ * @return string Normalized path
+ */
+function make_path(...$segments): string {
+	$clean = [];
+	foreach ($segments as $i => $seg) {
+		if ($i === 0) {
+			// Preserve leading slash if absolute
+			$seg = rtrim($seg, " \/");
+		} else {
+			$seg = trim($seg, " \/");
+		}
+		if ($seg !== '') {
+			$clean[] = $seg;
+		}
+	}
+	$path = implode('/', $clean);
+	// If first segment was absolute, ensure leading slash
+	if (isset($segments[0]) && strpos($segments[0], '/') === 0 && strpos($path, '/') !== 0) {
+		$path = '/' . $path;
+	}
+	return $path;
+}
+
 
 /**
  * Retrieves WordPress database connection settings from multiple sources in a specific priority order.

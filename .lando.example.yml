@@ -1,0 +1,250 @@
+name: gl-color-palette-generator
+recipe: wordpress
+config:
+  php: '8.2'
+  # WordPress Recommended: PHP 8.1 or 8.2
+  # https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/
+  # As of April 2025, WordPress supports PHP versions 8.4 (beta), 8.3 (beta), 8.2, 8.1, and 8.0 for the latest WordPress version, 6.8.
+  # For WordPress version 6.7, the supported PHP versions are 8.4 (beta), 8.3 (beta), 8.2, 8.1, and 8.0.
+  # WordPress version 6.6 supports PHP versions 8.3 (beta), 8.2, 8.1, 8.0, 7.4, 7.3, 7.2, and does not support PHP 7.1 and older.
+  ssl: true
+  xdebug: true
+  config:
+    php: php.ini
+  ServerName: gl-color-palette.lndo.site
+  database: mysql:8.0
+  webroot: .
+  composer_version: '2.8.8'
+
+# Force HTTPS only (port 443) and prevent HTTP routes from being created
+proxy:
+  appserver:
+    - gl-color-palette.lndo.site:443
+
+keys:
+  - lando_id_rsa
+
+services:
+  appserver:
+    config:
+      php: php.ini
+    ports:
+      - "443"
+    composer:
+      # PHPUnit 11.x requires PHP 8.2 or higher, but we're using PHP 8.1.
+      # Can't use "phpunit/phpunit: '*' " yet
+      #phpunit/phpunit: '^9.6' fails also
+      phpunit/phpunit: '9.6.13'
+
+    build_as_root:
+      - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+      - apt-get update -y
+      - apt-get install -y git
+      # MyCLI is a command line interface for MySQL, MariaDB, with auto-completion and syntax highlighting.
+      - apt update && apt install -y mycli
+    build:
+      - composer install
+    run_as_root:
+      # Create log file and set permissions
+      - mkdir -p /var/www/html/logs
+      - touch /var/www/html/logs/xdebug.log
+      - chmod 777 /var/www/html/logs/xdebug.log
+      - chown www-data:www-data /var/www/html/logs/xdebug.log
+      # Set up composer directory
+      - mkdir -p /var/www/.composer
+      - chown -R www-data:www-data /var/www/.composer
+      - chmod -R 777 /var/www/.composer /var/www/html/logs
+    overrides:
+      ports:
+        - "443"
+      environment:
+        HTTP_HOST: 'gl-color-palette.lndo.site'
+        WP_ROOT: /app
+        BUILD_PATH: /app/wp-content/plugins/gl-color-palette-generator
+        XDEBUG_MODE: 'debug,develop,trace,coverage'
+        XDEBUG_CONFIG: 'client_host=host.docker.internal client_port=9003 log=/var/www/html/logs/xdebug.log'
+        WP_TESTS_DIR: /app/wordpress-phpunit
+        WP_CORE_DIR: /app/wordpress/
+        TEST_DB_NAME: wordpress_test
+        TEST_DB_USER: wordpress
+        TEST_DB_PASS: wordpress
+        TEST_DB_HOST: database
+  database:
+    type: mysql:8.0
+    healthcheck: mysql -uroot --silent --execute "SHOW DATABASES;"
+  mailhog:
+    type: mailhog
+    hogfrom:
+      - appserver
+  pma:
+    type: phpmyadmin
+    hosts:
+      - database
+
+tooling:
+  db-export:
+    service: database
+    description: Export database to a file
+    # Uses Lando's built-in SQL export helper script
+    cmd: /helpers/sql-export.sh
+    options:
+      host:
+        default: database
+        describe: Database host
+      user:
+        default: wordpress
+        describe: Database user
+      password:
+        default: wordpress
+        describe: Database password
+      database:
+        default: wordpress
+        describe: Database name
+      port:
+        default: 3306
+        describe: Database port
+      no-wipe:
+        default: false
+        describe: Do not destroy the target file if it exists
+        boolean: true
+  db-import:
+    service: database
+    description: Import database from a file
+    # Uses Lando's built-in SQL import helper script
+    cmd: /helpers/sql-import.sh
+    options:
+      host:
+        default: database
+        describe: Database host
+      user:
+        default: wordpress
+        describe: Database user
+      password:
+        default: wordpress
+        describe: Database password
+      database:
+        default: wordpress
+        describe: Database name
+      port:
+        default: 3306
+        describe: Database port
+  composer:
+    service: appserver
+  setup-wp-tests:
+    service: appserver
+    description: Set up WordPress test environment
+    cmd: bash /app/wp-content/plugins/gl-color-palette-generator/bin/install-wp-tests.sh wordpress_test wordpress wordpress database latest true
+# Test Commands
+# All test commands require:
+# - WP_ROOT=/app to locate WordPress files
+# - composer dump-autoload to ensure all classes are available
+# Available test suites:
+# - test             : Run all non-WP-Mock tests
+# - test:wp-mock     : Run only WP Mock tests (tests/wp-mock/)
+# - test:unit        : Run unit tests (tests/unit/)
+# - test:integration : Run integration tests (tests/integration/)
+# - test:admin       : Run admin tests (tests/wp-mock/admin/)
+# - test:core        : Run core tests (tests/wp-mock/core/)
+# - test:providers   : Run provider tests (tests/wp-mock/providers/)
+# - test:coverage    : Generate code coverage report (outputs to ./coverage/)
+  test:
+    service: appserver
+    description: Run all plugin tests (use test:wp-mock or LANDO_TEST_GROUP=wp-mock for WP Mock tests only)
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      composer dump-autoload && \
+      if [ "$LANDO_TEST_GROUP" = "wp-mock" ]; then
+        vendor/bin/phpunit --group wp-mock
+      else
+        vendor/bin/phpunit --exclude-group wp-mock
+      fi
+    env:
+      - WP_ROOT=/app
+  test:wp-mock:
+    service: appserver
+    description: Run wp-mock tests only
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      composer dump-autoload && \
+      vendor/bin/phpunit --group wp-mock
+    env:
+      - WP_ROOT=/app
+  test:integration:
+    service: appserver
+    description: Run integration tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite integration
+    env:
+      - WP_ROOT=/app
+  test:coverage:
+    service: appserver
+    description: Generate code coverage report
+    cmd: cd /app/wp-content/plugins/gl-color-palette-generator && \
+      composer dump-autoload && \
+      vendor/bin/phpunit --coverage-html ./coverage
+    env:
+      - WP_ROOT=/app
+  test:unit:
+    service: appserver
+    description: Run unit tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite unit
+    env:
+      - WP_ROOT=/app
+  test:mock:
+    service: appserver
+    description: Run WP Mock tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite wp-mock
+    env:
+      - WP_ROOT=/app
+  test:api:
+    service: appserver
+    description: Run API tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite api
+    env:
+      - WP_ROOT=/app
+  test:core:
+    service: appserver
+    description: Run core tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite core
+    env:
+      - WP_ROOT=/app
+  test:admin:
+    service: appserver
+    description: Run admin tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite admin
+    env:
+      - WP_ROOT=/app
+  test:providers:
+    service: appserver
+    description: Run provider tests
+    cmd: |
+      cd /app/wp-content/plugins/gl-color-palette-generator && \
+      vendor/bin/phpunit --testsuite providers
+    env:
+      - WP_ROOT=/app
+  mycli:
+    service: appserver
+    description: Open mycli client
+    cmd: mycli -uwordpress -pwordpress -hdatabase wordpress
+
+events:
+  post-db-import:
+    - appserver: wp search-replace "glerner.com" "gl-color-palette.lndo.site" --all-tables --verbose --skip-columns=guid
+
+excludes:
+  - vendor          # Composer dependencies
+  - node_modules    # NPM dependencies
+  - wordpress-phpunit  # Test framework
+  - .git           # Version control
+  - .github        # GitHub specific files

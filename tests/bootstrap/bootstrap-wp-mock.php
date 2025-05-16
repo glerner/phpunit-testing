@@ -17,6 +17,11 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
 // Initialize error reporting
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 ini_set('display_errors', '1');
@@ -40,6 +45,16 @@ define('WP_CONTENT_DIR', $wp_content_dir);
 
 $wp_plugin_dir = get_setting('WP_PLUGIN_DIR', WP_CONTENT_DIR . '/plugins');
 define('WP_PLUGIN_DIR', $wp_plugin_dir);
+
+// Find the WordPress test library
+$wp_tests_dir = get_setting('WP_TESTS_DIR');
+
+if (!$wp_tests_dir || !is_dir($wp_tests_dir)) {
+	echo "ERROR: WordPress test library not found in $wp_tests_dir.\n";
+	echo "Please set WP_TESTS_DIR in your .env.testing to the path of the WordPress test library.\n";
+	echo "That is where setup-plugin-tests.php installs it.\n";
+	exit(1);
+}
 
 // Initialize WP_Mock
 echo "Initializing WP_Mock\n";

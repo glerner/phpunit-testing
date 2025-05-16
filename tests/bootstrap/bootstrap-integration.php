@@ -17,6 +17,13 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
+$filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
+
 // Define WordPress test environment constants if not already defined
 if (!defined('WP_TESTS_MULTISITE')) {
 	define('WP_TESTS_MULTISITE', false);
@@ -30,44 +37,18 @@ if (!defined('WP_TESTS_FORCE_KNOWN_BUGS')) {
 echo "Locating WordPress test library\n";
 
 // Use get_setting function from bootstrap.php to get WP_TESTS_DIR
-$wp_tests_dir = get_setting('WP_TESTS_DIR');
-
-// Try to find the WordPress test library in common locations
-if (!$wp_tests_dir) {
-	// Get WordPress root from settings
-	$wp_root = get_setting('FILESYSTEM_WP_ROOT');
-	
-	$possible_locations = [
-	    // As installed by setup-plugin-tests.php
-	    $wp_root . '/wp-content/plugins/wordpress-develop/tests/phpunit',
-	    // As installed by composer wordpress-dev package
-	    dirname(__DIR__, 4) . '/vendor/wordpress/wordpress-develop/tests/phpunit',
-	    // As installed via wp-cli scaffold
-	    dirname(__DIR__, 4) . '/wp-content/plugins/wordpress-develop/tests/phpunit',
-	    // Standard locations
-	    '/tmp/wordpress-tests-lib',
-	    '/var/www/wordpress-develop/tests/phpunit',
-	    '/wordpress-develop/tests/phpunit',
-	];
-
-	foreach ($possible_locations as $location) {
-	    if (is_dir($location)) {
-	        $wp_tests_dir = $location;
-	        break;
-	    }
-	}
-}
+$wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit");
 
 // Bail if we couldn't find the tests directory
 if (!$wp_tests_dir || !is_dir($wp_tests_dir)) {
-	echo "ERROR: WordPress test library not found.\n";
-	echo "Please set the WP_TESTS_DIR environment variable to the path of the WordPress test library.\n";
-	echo "See: https://developer.wordpress.org/cli/commands/scaffold/plugin-tests/\n";
+	echo "ERROR: WordPress test library not found in $wp_tests_dir.\n";
+	echo "Please set WP_TESTS_DIR in your .env.testing to the path of the WordPress test library.\n";
+	echo "That is where setup-plugin-tests.php installs it.\n";
 	exit(1);
 }
 
 // Load the WordPress test bootstrap file
-echo "Loading WordPress test bootstrap from: {$wp_tests_dir}\n";
+echo "Loading WordPress test include from: {$wp_tests_dir}/includes/bootstrap.php\n";
 require_once $wp_tests_dir . '/includes/bootstrap.php';
 
 // Initialize Mockery for integration tests

@@ -3,7 +3,7 @@
  * Sync Plugin to WordPress and Run Tests
  *
  * This script syncs your plugin to WordPress and runs PHPUnit tests.
- * It provides a simple way to run tests without requiring Composer or Lando.
+ * It provides a simple way to run tests without requiring Composer or Lando command lines.
  *
  * Usage:
  *   php bin/sync-and-test.php [--unit|--wp-mock|--integration|--all] [--file=<file>] [--coverage] [--verbose]
@@ -32,7 +32,7 @@ namespace WP_PHPUnit_Framework\Bin;
  * PROJECT_DIR should be your-plugin
 */
 define('SCRIPT_DIR', __DIR__);
-define('PROJECT_DIR', dirname(dirname(__DIR__)));
+define('PROJECT_DIR', dirname(SCRIPT_DIR,2));
 
 // Include the framework utility functions
 require_once SCRIPT_DIR . '/framework-functions.php';
@@ -41,6 +41,7 @@ use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
 use function WP_PHPUnit_Framework\get_setting;
 use function WP_PHPUnit_Framework\esc_cli;
+use function WP_PHPUnit_Framework\make_path;
 
 // Set default timezone to avoid warnings
 date_default_timezone_set('UTC');
@@ -99,6 +100,7 @@ $options = [
 	'wp-mock'     => false,
 	'integration' => false,
 	'all'         => false,
+	'multisite'   => false,
 	'coverage'    => false,
 	'verbose'     => false,
 	'help'        => false,
@@ -120,9 +122,16 @@ foreach ($argv as $arg) {
 		$options['coverage'] = true;
 	} elseif ($arg === '--verbose') {
 		$options['verbose'] = true;
+	} elseif ($arg === '--multisite') {
+		$options['multisite'] = true;
 	} elseif ($arg === '--help' || $arg === '-h') {
 		$options['help'] = true;
 	}
+}
+
+// If only --multisite is given, default to --integration --multisite
+if ($options['multisite'] && !$options['unit'] && !$options['wp-mock'] && !$options['integration'] && !$options['all']) {
+	$options['integration'] = true;
 }
 
 // Show help if requested or if no test type is specified
@@ -148,23 +157,29 @@ if (empty($filesystem_wp_root)) {
 	exit(1);
 }
 
-$your_plugin_slug = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
-$folder_in_wordpress = \WP_PHPUnit_Framework\get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+$your_plugin_slug = get_setting('YOUR_PLUGIN_SLUG', 'gl-phpunit-testing-framework');
+$folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+$wp_root = get_setting('WP_ROOT', '/app');
 $your_plugin_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $your_plugin_slug;
+$tests_dir = PROJECT_DIR . '/tests';
 
-colored_message("Using paths:", 'blue');
-echo esc_cli("  Project source: " . PROJECT_DIR . "\n");
-echo esc_cli("  WordPress root: " . $filesystem_wp_root . "\n");
-echo esc_cli("  Project destination: " . $your_plugin_dest . "\n");
+// Path to plugin/theme tests directory inside the container (for Lando)
+// Canonical plugin/theme tests directory, always inside the 'WordPress root' (WP_ROOT)
+// This works for both container and host, as long as WP_ROOT is set appropriately in .env.testing
+// Canonical plugin/theme tests directory, always inside the 'WordPress root' (WP_ROOT)
+// Uses make_path() for normalization
+$container_plugin_dest = make_path($wp_root, $folder_in_wordpress, $your_plugin_slug, 'tests');
+
+$test_error_log = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
 
 // Step 1: Sync plugin to WordPress
 colored_message("\nStep 1: Syncing project to WordPress...", 'green');
 
 // Ensure vendor directory exists in source
-if (!is_dir(PROJECT_DIR . '/tests/vendor')) {
-	colored_message("Installing composer dependencies in source...", 'yellow');
-	chdir(PROJECT_DIR . '/tests');
-	exec('composer install');
+if (!is_dir("$tests_dir/vendor")) {
+	colored_message("Missing composer dependencies in $tests_dir/vendor...", 'yellow');
+	error_log("Missing composer dependencies in $tests_dir/vendor\n", 3, $test_error_log);
+	exit(1);
 }
 
 // Create destination directory if it doesn't exist
@@ -180,6 +195,7 @@ if (!is_dir($your_plugin_dest)) {
 $sync_script = SCRIPT_DIR . '/sync-to-wp.php';
 if (!file_exists($sync_script)) {
 	colored_message("Error: Could not find sync-to-wp.php script at $sync_script", 'red');
+	error_log("Could not find sync-to-wp.php script at $sync_script\n", 3, $test_error_log);
 	exit(1);
 }
 
@@ -193,13 +209,15 @@ passthru($sync_cmd, $sync_return);
 
 if ($sync_return !== 0) {
 	colored_message("Error: sync-to-wp.php failed with exit code $sync_return", 'red');
+	error_log("sync-to-wp.php failed with exit code $sync_return\n", 3, $test_error_log);
 	exit($sync_return);
 }
 
 // Step 2: Change to the WordPress plugin directory
-colored_message("\nStep 2: Changing to WordPress plugin directory...", 'green');
-if (!chdir($your_plugin_dest)) {
-	colored_message("Error: Could not change to WordPress plugin directory: $your_plugin_dest", 'red');
+colored_message("\nStep 2: Changing to WordPress plugin directory tests...", 'green');
+if (!chdir($your_plugin_dest . '/tests')) {
+	colored_message("Error: Could not change to WordPress plugin directory: $your_plugin_dest/tests", 'red');
+	error_log("Error: Could not change to WordPress plugin directory: $your_plugin_dest/tests\n", 3, $test_error_log);
 	exit(1);
 }
 colored_message("Current directory: " . getcwd(), 'blue');
@@ -207,74 +225,70 @@ colored_message("Current directory: " . getcwd(), 'blue');
 // Step 3: Run the tests
 colored_message("\nStep 3: Running tests...", 'green');
 
-/**
- * Build a PHPUnit command with the appropriate options
- *
- * @param string $config_file The PHPUnit configuration file to use
- * @param string $test_type   The type of test (unit, wp-mock, integration)
- * @param array  $options     Command line options
- * @return string The complete PHPUnit command
- */
-function build_phpunit_command($config_file, $test_type, $options) {
-	$cmd = "./vendor/bin/phpunit -c config/{$config_file}";
+// Lando detection logic
+$ssh_command = get_setting('SSH_COMMAND', 'none');
+$wp_root = get_setting('WP_ROOT', '');
+$in_lando = \WP_PHPUnit_Framework\is_lando_environment();
 
-	// Add verbose option if requested
-	if ($options['verbose']) {
-		$cmd .= ' --verbose';
-	}
-
-	// Add coverage option if requested
-	if ($options['coverage']) {
-		$cmd .= " --coverage-html build/coverage-{$test_type}";
-	}
-
-	// Add specific file if provided
-	if (!empty($options['file'])) {
-		$cmd .= ' ' . $options['file'];
-	}
-
-	return $cmd;
+// If WP_ROOT is /app but not in Lando, error
+if ($wp_root === '/app' && !$in_lando) {
+	colored_message("Error: WP_ROOT is set to /app but not running in a Lando environment.", 'red');
+	colored_message("Please run this script inside Lando or set WP_ROOT to your local WordPress path.", 'red');
+	exit(1);
 }
 
-// Execute tests based on the selected type
+function run_phpunit_command($cmd, $options, $in_lando, $cmd_dir) {
+	if ($in_lando) {
+		// Lando: run PHPUnit in the container at the correct directory
+		$lando_cmd = "lando ssh -c 'cd $cmd_dir && $cmd'";
+		colored_message("Executing in Lando: $lando_cmd", 'blue');
+		passthru($lando_cmd, $phpunit_return);
+	} else {
+		// Host: cd to the correct directory and run the command
+		$host_cmd = "cd $cmd_dir && $cmd";
+		colored_message("Executing on host: $host_cmd", 'blue');
+		passthru($host_cmd, $phpunit_return);
+	}
+	return $phpunit_return;
+}
+
 if ($options['unit']) {
-	// Run unit tests
-	colored_message("Running unit tests...", 'blue');
-	$phpunit_cmd = build_phpunit_command('phpunit-unit.xml.dist', 'unit', $options);
+	colored_message("\n=== Running unit tests...", 'blue');
+	$phpunit_cmd = build_phpunit_command('phpunit-unit.xml.dist', 'unit', $options, $container_plugin_dest);
 	colored_message("Executing: $phpunit_cmd", 'blue');
-	passthru($phpunit_cmd, $phpunit_return);
+	$phpunit_return = run_phpunit_command($phpunit_cmd, $options, $in_lando, $container_plugin_dest);
 } elseif ($options['wp-mock']) {
-	// Run WP Mock tests
-	colored_message("Running WP Mock tests...", 'blue');
-	$phpunit_cmd = build_phpunit_command('phpunit-wp-mock.xml.dist', 'wp-mock', $options);
+	colored_message("\n=== Running WP Mock tests...", 'blue');
+	$phpunit_cmd = build_phpunit_command('phpunit-wp-mock.xml.dist', 'wp-mock', $options, $container_plugin_dest);
 	colored_message("Executing: $phpunit_cmd", 'blue');
-	passthru($phpunit_cmd, $phpunit_return);
+	$phpunit_return = run_phpunit_command($phpunit_cmd, $options, $in_lando, $container_plugin_dest);
 } elseif ($options['integration']) {
-	// Run integration tests
-	colored_message("Running integration tests...", 'blue');
-	$phpunit_cmd = build_phpunit_command('phpunit-integration.xml.dist', 'integration', $options);
+	colored_message("\n=== Running integration tests...", 'blue');
+	// Use multisite config if --multisite is set
+	$integration_config = $options['multisite'] ? 'phpunit-multisite.xml.dist' : 'phpunit-integration.xml.dist';
+	$phpunit_cmd = build_phpunit_command($integration_config, 'integration', $options, $container_plugin_dest);
 	colored_message("Executing: $phpunit_cmd", 'blue');
-	passthru($phpunit_cmd, $phpunit_return);
+	$phpunit_return = run_phpunit_command($phpunit_cmd, $options, $in_lando, $container_plugin_dest);
 } elseif ($options['all']) {
-	colored_message("Running all tests sequentially...", 'green');
+	colored_message("\n=== Running all tests sequentially...", 'green');
 
 	// Run unit tests
-	colored_message("\nRunning unit tests...", 'blue');
-	$unit_cmd = build_phpunit_command('phpunit-unit.xml.dist', 'unit', $options);
+	colored_message("\n=== Running unit tests...", 'blue');
+	$unit_cmd = build_phpunit_command('phpunit-unit.xml.dist', 'unit', $options, $container_plugin_dest);
 	colored_message("Executing: $unit_cmd", 'blue');
-	passthru($unit_cmd, $unit_return);
+	$unit_return = run_phpunit_command($unit_cmd, $options, $in_lando, $container_plugin_dest);
 
 	// Run WP Mock tests
-	colored_message("\nRunning WP Mock tests...", 'blue');
-	$wp_mock_cmd = build_phpunit_command('phpunit-wp-mock.xml.dist', 'wp-mock', $options);
+	colored_message("\n=== Running WP Mock tests...", 'blue');
+	$wp_mock_cmd = build_phpunit_command('phpunit-wp-mock.xml.dist', 'wp-mock', $options, $container_plugin_dest);
 	colored_message("Executing: $wp_mock_cmd", 'blue');
-	passthru($wp_mock_cmd, $wp_mock_return);
+	$wp_mock_return = run_phpunit_command($wp_mock_cmd, $options, $in_lando, $container_plugin_dest);
 
 	// Run integration tests
-	colored_message("\nRunning integration tests...", 'blue');
-	$integration_cmd = build_phpunit_command('phpunit-integration.xml.dist', 'integration', $options);
+	colored_message("\n=== Running integration tests...", 'blue');
+	$integration_cmd = build_phpunit_command('phpunit-integration.xml.dist', 'integration', $options, $container_plugin_dest);
 	colored_message("Executing: $integration_cmd", 'blue');
-	passthru($integration_cmd, $integration_return);
+	$integration_return = run_phpunit_command($integration_cmd, $options, $in_lando, $container_plugin_dest);
 
 	// Check if any test suite failed
 	if ($unit_return !== 0 || $wp_mock_return !== 0 || $integration_return !== 0) {
@@ -307,3 +321,40 @@ if ($phpunit_return === 0) {
 }
 
 exit($phpunit_return);
+
+/**
+ * Build a PHPUnit command with the appropriate options
+ *
+ * @param string $config_file PHPUnit XML config file name (e.g. phpunit-unit.xml.dist)
+ * @param string $test_type   The test type (unit, wp-mock, integration)
+ * @param array  $options     Command line options
+ * @param string $test_dir    Path to the tests directory (container or host, depending on context)
+ * @return string             The full PHPUnit command to execute
+ *
+ * Uses tests/vendor/bin/phpunit as the executable path because Composer's vendor-dir is set to tests/vendor.
+ * This ensures the correct project-specific PHPUnit version is used, per Composer best practices.
+ */
+function build_phpunit_command($config_file, $test_type, $options, $test_dir) {
+	global $test_error_log;
+	// Build command using canonical test directory, not getcwd()
+	$cmd = "$test_dir/vendor/bin/phpunit -c $test_dir/config/{$config_file}";
+
+	// Add verbose option if requested
+	if ($options['verbose']) {
+		$cmd .= ' --verbose';
+	}
+
+	// Add coverage option if requested
+	if ($options['coverage']) {
+		$cmd .= " --coverage-html build/coverage-{$test_type}";
+	}
+
+	// Add specific file if provided
+	if (!empty($options['file'])) {
+		$cmd .= ' ' . $options['file'];
+	}
+
+	error_log("PHPUnit command: $cmd\n",3,$test_error_log);
+
+	return $cmd;
+}

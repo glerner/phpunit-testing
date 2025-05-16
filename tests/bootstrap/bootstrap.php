@@ -13,24 +13,41 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\get_phpunit_database_settings;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\esc_cli;
+
+/* in Bootstrap:
+ * __DIR__ is your-plugin/tests/bootstrap
+ * SCRIPT_DIR should be your-plugin/tests/bin
+ * PROJECT_DIR should be your-plugin
+*/
+define('SCRIPT_DIR', dirname(__DIR__, 2) . '/tests/bin');
+define('PROJECT_DIR', dirname(__DIR__, 2));
+
+echo "Script dir: " . SCRIPT_DIR . "\n";
+echo "Project dir: " . PROJECT_DIR . "\n";
 // Include the framework utility functions
-require_once dirname(__DIR__) . '/bin/framework-functions.php';
+require_once SCRIPT_DIR . '/framework-functions.php';
 
 // Display initialization information
 echo "\n=== WordPress PHPUnit Testing Framework Bootstrap ===\n";
 echo "\n=== Phase 1: Composer Autoloader ===\n";
 
 // Determine the framework root directory
-$framework_root = dirname(__DIR__, 2);
+$wp_plugin_root = dirname(__DIR__, 2);
+echo "Your Plugin root directory in WordPress: $wp_plugin_root\n";
 
 // Load Composer autoloader
-$autoloader_path = $framework_root . '/vendor/autoload.php';
+$autoloader_path = $wp_plugin_root . '/tests/vendor/autoload.php';
+echo "Loading Composer autoloader from $autoloader_path\n";
 if (file_exists($autoloader_path)) {
-	echo "Loading Composer autoloader from framework\n";
 	$autoloader = require $autoloader_path;
 } else {
 	// Try to find autoloader in parent directories (when used as a submodule)
-	$autoloader_path = dirname($framework_root, 2) . '/vendor/autoload.php';
+	$autoloader_path = dirname($wp_plugin_root, 2) . '/vendor/autoload.php';
+	echo "Loading Composer autoloader from $autoloader_path\n";
 	if (file_exists($autoloader_path)) {
 	    echo "Loading Composer autoloader from parent project\n";
 	    $autoloader = require $autoloader_path;
@@ -44,7 +61,7 @@ if (file_exists($autoloader_path)) {
 // Register framework classes with autoloader if needed
 if ($autoloader instanceof \Composer\Autoload\ClassLoader) {
 	echo "Registering framework PSR-4 prefixes\n";
-	$autoloader->addPsr4('WP_PHPUnit_Framework\\', $framework_root . '/src');
+	$autoloader->addPsr4('WP_PHPUnit_Framework\\', $wp_plugin_root . '/src');
 	$autoloader->register();
 }
 
@@ -56,75 +73,38 @@ ini_set('display_errors', '1');
 
 // Define common constants
 if (!defined('WP_PHPUNIT_FRAMEWORK_DIR')) {
-	define('WP_PHPUNIT_FRAMEWORK_DIR', $framework_root . '/');
+	define('WP_PHPUNIT_FRAMEWORK_DIR', $wp_plugin_root . '/');
 }
 
 // Load settings from .env.testing
-$env_file = $framework_root . '/.env.testing';
-$loaded_settings = [];
+global $loaded_settings;
+$env_file = PROJECT_DIR . '/tests/.env.testing';
+$loaded_settings = load_settings_file($env_file);
 
-if (file_exists($env_file)) {
-    echo "Loading environment variables from .env.testing at: {$env_file}\n";
-    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        // Skip comments
-        if (strpos(trim($line), '#') === 0) {
-            continue;
-        }
+// Find the WordPress test library
+$wp_tests_dir = get_setting('WP_TESTS_DIR', get_setting('FILESYSTEM_WP_ROOT') . '/wp-content/plugins/wordpress-develop/tests/phpunit');
 
-        // Parse valid setting lines
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-
-            // Remove quotes if present
-            if (preg_match('/^(["\'])(.*?)\1$/', $value, $matches)) {
-                $value = $matches[2];
-            }
-
-            $loaded_settings[$key] = $value;
-        }
-    }
-}
-
-/**
- * Get a configuration value from environment variables, .env file, or default
- *
- * @param string $name Setting name
- * @param mixed  $default Default value if not found
- * @return mixed Setting value
- */
-function get_setting(string $name, mixed $default = null): mixed {
-    // Check environment variables first (highest priority)
-    $env_value = getenv($name);
-    if ($env_value !== false) {
-        return $env_value;
-    }
-
-    // Check our loaded settings (already loaded from .env.testing)
-    global $loaded_settings;
-    if (isset($loaded_settings[$name])) {
-        return $loaded_settings[$name];
-    }
-
-    // Return default if not found
-    return $default;
+if (!$wp_tests_dir || !is_dir($wp_tests_dir)) {
+	echo "ERROR: WordPress test library not found in $wp_tests_dir.\n";
+	echo "Please set WP_TESTS_DIR in your .env.testing to the path of the WordPress test library.\n";
+	echo "That is where setup-plugin-tests.php installs it.\n";
+	exit(1);
 }
 
 // Load specific bootstrap file based on test type
 $bootstrap_type = get_setting('PHPUNIT_BOOTSTRAP_TYPE', 'unit');
-echo "Loading bootstrap for test type: {$bootstrap_type}\n";
+$bootstrap_folder = PROJECT_DIR . '/tests/bootstrap';
+echo "Loading bootstrap $bootstrap_folder for test type: {$bootstrap_type}\n";
 
 switch ($bootstrap_type) {
 	case 'unit':
-	    require_once __DIR__ . '/bootstrap-unit.php';
+	    require_once $bootstrap_folder . '/bootstrap-unit.php';
 	    break;
 	case 'wp-mock':
-	    require_once __DIR__ . '/bootstrap-wp-mock.php';
+	    require_once $bootstrap_folder . '/bootstrap-wp-mock.php';
 	    break;
 	case 'integration':
-	    require_once __DIR__ . '/bootstrap-integration.php';
+	    require_once $bootstrap_folder . '/bootstrap-integration.php';
 	    break;
 	default:
 	    echo "ERROR: Unknown bootstrap type: {$bootstrap_type}\n";
