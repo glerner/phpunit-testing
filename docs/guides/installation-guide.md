@@ -86,6 +86,36 @@ git submodule update --remote --merge
 # Stage the updated submodule pointer in your main repo
 git add tests/gl-phpunit-test-framework
 
+#### Prevent Accidental Submodule Edits
+
+To avoid accidentally editing files in the submodule directory, you can set up a pre-commit hook.
+Add (or append to existing) the following to your .git/hooks/pre-commit file:
+
+```bash
+# From your plugin's root directory
+cat > .git/hooks/pre-commit << 'EOL'
+#!/bin/bash
+
+# Check if any file in the submodule is modified
+if git diff --cached --name-only | grep -q '^tests/gl-phpunit-test-framework/'; then
+    echo "Error: Direct modifications to submodule files detected!"
+    echo "Please make changes in the main repository instead."
+    echo "Modified files:"
+    git diff --cached --name-only | grep '^tests/gl-phpunit-test-framework/'
+    exit 1
+fi
+EOL
+
+# Make the hook executable
+chmod +x .git/hooks/pre-commit
+```
+
+This hook will prevent you from accidentally committing changes directly to the submodule. Instead, you should:
+1. Make changes in the main repository
+2. Sync them to the submodule directory
+3. Commit and push from the submodule directory
+
+
 # Commit the update in your main repo
 git commit -m "Update phpunit-testing submodule to latest upstream"
 ```
