@@ -25,6 +25,12 @@ This guide walks through the process of creating a local Git repository and conn
    git status
 
    git add .
+   # or with list of files added
+   git add . --verbose
+   ```
+   - The '.' is to add all files. Instead of all files, you can add specific files:
+   ```bash
+   git add filename1 filename2
    ```
    - Tip: Always run `git status` before `git add .` to verify what will be added
 
@@ -51,7 +57,7 @@ This guide walks through the process of creating a local Git repository and conn
 3. Name your repository (use the same name as your local project for clarity)
 4. Add an optional description
 5. Choose public or private visibility
-6. **Do not** initialize with README, license, or .gitignore (since we already have a local repository)
+6. **Do not** initialize with README, license, or .gitignore (since we already have a local repository, create locally)
 7. Click "Create repository"
 
 ## Connecting Local Repository to GitHub
@@ -134,7 +140,8 @@ This guide walks through the process of creating a local Git repository and conn
 
    #### Global Settings (in `~/.gitconfig`)
 
-   These settings should be applied globally as they apply to all repositories:
+   These settings should be applied globally as they apply to all repositories.
+   Run these from your Shell or Bash:
 
    ```bash
    # Identity settings
@@ -207,10 +214,13 @@ This guide walks through the process of creating a local Git repository and conn
    git diff
 
    # Optionally save the diff to a file for AI assistance with commit messages
-   git diff >junk.txt
+   git diff >changes.diff
+
+   # after a git add . or git add some files
+   git diff --staged >changes.diff
    ```
 
-   - Tip: After saving the diff to junk.txt, ask AI "Make a git commit message for these changes:" followed by the full text of the diff. Review the AI's result.
+   - Tip: After saving the diff to changes.diff, ask AI "Make a git commit message for these changes:" followed by the full text of the diff. Review the AI's result.
    - Note: It's best to do this review BEFORE running git add, as it's easier to see what's changed
 
 3. Stage your changes:
@@ -223,6 +233,8 @@ This guide walks through the process of creating a local Git repository and conn
    git commit -m "Descriptive message about your changes"
    ```
    - For multi-line commit messages, just use `git commit` and a text editor will open
+
+   *Suggestion*: Have AI review all the changes in the entire changes.diff and make a detailed commit message
 
 5. Push your changes to GitHub:
    ```bash
@@ -266,5 +278,55 @@ git remote -v
 ### Changing from SSH to HTTPS URL
 ```bash
 git remote set-url origin https://github.com/yourusername/your-repository-name.git
+```
+
+### Updating GitHub Personal Access Token
+
+GitHub Personal Access Tokens expire after 90 days (or less if you configure that). You will get an email from GitHub reminding you to regenerate your token.
+
+Regenerate a token on the same page you generated it (see above, `## Connecting Local Repository to GitHub`). Save it immediately in a password manager.
+
+If you've generated a new Personal Access Token and are getting authentication errors:
+
+1. Clear your stored credentials based on your token strategy:
+
+   **If you use one token for all repositories** (recommended for most users):
+   ```bash
+   # Clears credentials for all GitHub repositories
+   echo "url=https://github.com" | git credential reject
+   ```
+
+   **If you use separate tokens per repository** (advanced usage):
+   ```bash
+   # Replace with your repository's full URL
+   echo "url=https://github.com/username/repository-name.git" | git credential reject
+   ```
+   
+   **Alternative format using attributes** (works for both cases):
+   ```bash
+   git credential reject <<EOF
+   protocol=https
+   host=github.com
+   # Optional: Uncomment and add path for per-repository tokens
+   # path=username/repository-name.git
+   EOF
+   ```
+   
+   The URL format is preferred as it's more concise and handles all URL components automatically.
+
+2. The next time you push or pull, Git will prompt for your credentials. Use:
+   - Username: your GitHub username
+   - Password: your new Personal Access Token
+
+Alternatively, you can update the token in your credential helper:
+1. Open Keychain Access (macOS) or Credential Manager (Windows)
+2. Search for 'github.com'
+3. Update the password with your new token
+
+For a more permanent solution, consider using the credential cache:
+```bash
+git config --global credential.helper 'cache --timeout=3600'  # Stores credentials for 1 hour
+# OR
+git config --global credential.helper 'store'  # Stores credentials permanently (less secure)
 ```
 - Note: SSH connections are considered obsolete for GitHub. Personal Access Tokens with HTTPS URLs are now the recommended approach for authentication.

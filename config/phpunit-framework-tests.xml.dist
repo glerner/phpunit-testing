@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bootstrap="../tests/framework/bootstrap-framework-tests.php" backupGlobals="false" colors="true" convertErrorsToExceptions="true" convertNoticesToExceptions="true" convertWarningsToExceptions="true" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd">
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bootstrap="../gl-phpunit-test-framework/tests/framework/bootstrap-framework-tests.php" backupGlobals="false" colors="true" convertErrorsToExceptions="true" convertNoticesToExceptions="true" convertWarningsToExceptions="true" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd">
   <coverage>
     <include>
-      <directory suffix=".php">../src</directory>
+      <directory suffix=".php">../gl-phpunit-test-framework/src</directory>
     </include>
   </coverage>
   <testsuites>
     <testsuite name="framework">
-      <directory suffix=".php">../tests/framework/unit</directory>
-      <directory suffix=".php">../tests/framework/wp-mock</directory>
-      <directory suffix=".php">../tests/framework/integration</directory>
+      <directory suffix=".php">../gl-phpunit-test-framework/tests/framework/unit</directory>
+      <directory suffix=".php">../gl-phpunit-test-framework/tests/framework/wp-mock</directory>
+      <directory suffix=".php">../gl-phpunit-test-framework/tests/framework/integration</directory>
     </testsuite>
   </testsuites>
   <php>

@@ -23,7 +23,7 @@ class WP_Post {
 	public $post_title;
 	public $post_content;
 	public $post_status;
-	
+
 	public function __construct(int $id, string $title = '', string $content = '', string $status = 'publish') {
 		$this->ID = $id;
 		$this->post_title = $title;
@@ -176,9 +176,13 @@ class WordPress_Database_Test extends TestCase {
 
 	/**
 	 * Test post creation, retrieval, update and deletion
-	 * (Create, Read, Update, Delete operations)
+	 * (CRUD operations)
 	 */
 	public function test_post_crud_operations(): void {
+		// Check if WordPress core is available
+		$this->assertTrue(function_exists('wp_insert_post'), 'WordPress function wp_insert_post is not available');
+		$this->assertTrue(class_exists('WP_Post'), 'WordPress class WP_Post is not available');
+
 		// Create a test post with non-standard values
 		$post_id = wp_insert_post([
 			'post_title'   => $this->test_data['post']['title'],
@@ -196,7 +200,7 @@ class WordPress_Database_Test extends TestCase {
 		$post = get_post($post_id);
 
 		// Verify post data
-		$this->assertInstanceOf(\WP_Post::class, $post);
+		$this->assertInstanceOf('WP_Post', $post);
 		$this->assertEquals($this->test_data['post']['title'], $post->post_title);
 		$this->assertEquals($this->test_data['post']['content'], $post->post_content);
 		$this->assertEquals($this->test_data['post']['status'], $post->post_status);
@@ -230,7 +234,7 @@ class WordPress_Database_Test extends TestCase {
 		// Get option name and values from test data
 		$option_name = $this->test_data['option']['name'];
 		$option_value = $this->test_data['option']['value'];
-		
+
 		// Add the option
 		$result = add_option($option_name, $option_value);
 		$this->assertTrue($result);
@@ -262,6 +266,10 @@ class WordPress_Database_Test extends TestCase {
 	 * Tests creating, reading, updating, and deleting WordPress users
 	 */
 	public function test_user_functions(): void {
+		// Check if WordPress core is available
+		$this->assertTrue(function_exists('wp_create_user'), 'WordPress function wp_create_user is not available');
+		$this->assertTrue(class_exists('WP_User'), 'WordPress class WP_User is not available');
+
 		// Create a test user with non-standard values
 		$username = $this->test_data['user']['login_prefix'] . time();
 		$user_id = wp_create_user(
@@ -276,7 +284,7 @@ class WordPress_Database_Test extends TestCase {
 
 		// Get user
 		$user = get_user_by('id', $user_id);
-		$this->assertInstanceOf(\WP_User::class, $user);
+		$this->assertInstanceOf('WP_User', $user);
 		$this->assertEquals($username, $user->user_login);
 
 		// Update user

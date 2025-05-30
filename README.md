@@ -71,34 +71,9 @@ Rather than using a single configuration with conditional logic and environment 
 
 ## Installation Options
 
-### Installing PHPUnit
-
-PHPUnit is installed via Composer as part of the framework's dependencies. The framework requires PHPUnit 9.x due to compatibility requirements with other dependencies.
-
-After setting up the framework, you can run PHPUnit using:
-
-```bash
-# From your plugin directory
-./vendor/bin/phpunit
-```
+### Installing GL WordPress PHPUnit Testing Framework
 
 For detailed instructions on installing and configuring this framework, see the [Installation Guide](docs/guides/installation-guide.md).
-
-For guidance on writing and running tests, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
-
-### Option 1: Git Submodule (Recommended for Contributors)
-
-```bash
-# From your plugin's root directory
-git submodule add https://github.com/glerner/phpunit-testing.git tests/framework
-```
-
-### Option 2: Composer Package (Recommended for Standard Usage)
-
-```bash
-# From your plugin's root directory
-composer require glerner/phpunit-testing --dev
-```
 
 ## Usage
 
@@ -117,6 +92,8 @@ class Test_My_Class extends Unit_Test_Case {
     }
 }
 ```
+For guidance on writing and running tests using this full package, see the [PHPUnit Testing Tutorial](docs/guides/phpunit-testing-tutorial.md).
+
 
 ### Running Tests
 

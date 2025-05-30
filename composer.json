@@ -47,7 +47,7 @@
         "test:framework": "phpunit -c config/phpunit-framework-tests.xml.dist",
         "phpcs": "phpcs",
         "phpcbf": "composer run-script spaces_to_tabs && phpcbf",
-        "spaces_to_tabs": "find src tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;",
+        "spaces_to_tabs": "find src config tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;",
         "analyze": "vendor/bin/phpstan analyse --configuration=phpstan.neon",
         "sync:wp": "php bin/sync-to-wp.php",
         "wp:test": "SETUP_WP_TESTS=true php bin/sync-to-wp.php",

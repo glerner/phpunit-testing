@@ -606,6 +606,8 @@ The script handles all three steps automatically:
 2. Changes to the WordPress plugin directory
 3. Runs the appropriate tests
 
+**Note:** If only `--multisite` is given, it defaults to `--integration --multisite`.
+
 ##### Available Options
 
 ```
@@ -613,11 +615,16 @@ The script handles all three steps automatically:
 --unit          Run unit tests (tests that don't require WordPress functions)
 --wp-mock       Run WP Mock tests (tests that mock WordPress functions)
 --integration   Run integration tests (tests that require a WordPress database)
---all           Run all test types
+--all           Run all test types (unit, wp-mock, integration) in sequence
+--multisite     Run integration tests in multisite mode (or with --unit/--wp-mock for advanced scenarios)
 --coverage      Generate code coverage report in build/coverage directory
 --verbose       Show verbose output
 --file=<file>   Run a specific test file instead of the entire test suite
 ```
+
+When running integration tests with `--multisite`, `sync-and-test.php` sets `WP_TESTS_MULTISITE=1` in the environment.
+
+If there are no tests in a suite, PHPUnit will report "No tests executed!" — this is normal for new projects.
 
 ##### Examples
 
@@ -863,6 +870,70 @@ Additional environment variables can be used for specific tests that require API
 ## Contributing
 
 We welcome contributions to improve this testing framework and documentation. For detailed guidelines on how to contribute, please refer to the [CONTRIBUTING.md](../../CONTRIBUTING.md) file in the root of this repository.
+
+
+## Multisite Testing in WordPress Plugins
+
+### How Multisite Affects PHPUnit Tests
+
+- **Single-site tests** will run on the main site of a multisite WordPress install, but they do not test multisite-specific features (network options, site creation, switching blogs, etc.).
+- If your plugin has code that behaves differently on multisite, you must run tests with multisite enabled to cover those code paths.
+- Single-site tests will usually pass on a multisite install, but will not catch multisite-specific bugs.
+
+### When to Use `--multisite` for Different Test Types
+
+| Test Type   | Use --multisite?   | Why/Why Not?                         |
+|-------------|-------------------|--------------------------------------|
+| Unit        | No (almost never)  | Unit tests should be WP-agnostic     |
+| WP-Mock     | No                | WP-Mock doesn’t load real WP         |
+| Integration | Yes (sometimes)    | To test real multisite behavior      |
+
+- **Unit tests:** Only use multisite if you are testing logic that directly handles multisite-specific functionality (rare, e.g., a backup plugin that needs to handle network-wide and single-site backups). For most unit tests, multisite is not relevant, but your test case can always define constants or call functions to simulate multisite if needed.
+- **WP-Mock tests:** Multisite is not relevant; WP-Mock does not load a real WordPress environment. However, your test cases can manually define multisite-related constants or mock functions to simulate multisite logic if you wish.
+- **Integration tests:** Use multisite mode to test real multisite behavior, such as network options, site/user management, and blog switching. This is where `--multisite` is most useful and fully supported by the test runner.
+
+### Command-Line Options and Defaults
+
+- If a developer specifies only `--multisite`, the test runner (`sync-and-test.php`) automatically defaults to `--integration --multisite`.
+- When running integration tests with `--multisite`, `sync-and-test.php` sets the `WP_TESTS_MULTISITE=1` environment variable (via the PHPUnit XML config), ensuring the WordPress test suite runs in multisite mode.
+- `--multisite` is not meaningful for unit or WP-Mock tests unless your code specifically requires it, but your test cases can still set up multisite simulation if needed.
+
+### Do You Need `--url` for Multisite PHPUnit Tests?
+
+- **Usually not.**
+- The WordPress test suite sets up its own test sites and domains. You only need `--url` if your tests depend on a specific domain or subsite, or if using WP-CLI (not PHPUnit).
+- For most plugin integration tests, switching blogs with `switch_to_blog()` is sufficient.
+
+### Best Practices for Multisite PHPUnit Testing
+
+- Use a separate PHPUnit config file (e.g., `phpunit-multisite.xml.dist`) or set the `WP_TESTS_MULTISITE=1` environment variable.
+- Add a `--multisite` flag to your test runner to make running multisite tests easy and consistent.
+- In your test bootstrap, check for the multisite flag or env var and define multisite-related constants as needed.
+- Write integration tests that use multisite-specific functions and assertions (e.g., `is_multisite()`, `get_sites()`, `switch_to_blog()`).
+
+### Example: Enabling Multisite for Integration Tests
+
+1. **Copy your integration config:**
+   ```sh
+   cp config/phpunit-integration.xml.dist config/phpunit-multisite.xml.dist
+   ```
+2. **Edit `phpunit-multisite.xml.dist` to include:**
+   ```xml
+   <php>
+     <env name="WP_TESTS_MULTISITE" value="1"/>
+   </php>
+   ```
+3. **Update your test runner:**
+   - The included `sync-and-test.php` already supports the `--multisite` option and will use `phpunit-multisite.xml.dist` for integration tests if it is set. No extra configuration is needed.
+   - The test bootstrap (`tests/bootstrap/bootstrap.php`) also supports multisite via the `WP_TESTS_MULTISITE` environment variable.
+4. **Update your bootstrap:**
+   ```php
+   if (getenv('WP_TESTS_MULTISITE')) {
+       define('MULTISITE', true);
+       define('SUBDOMAIN_INSTALL', true); // or false, as needed
+       // ...other multisite constants
+   }
+   ```
 
 ### Coding Standards
 

@@ -39,7 +39,14 @@ For WordPress plugin testing specifically, also include:
 - Local development environment details (Lando, Docker, etc.)
 - Confirmation that code has been synced to the WordPress installation
 
-**Always sync before testing**: One of the most common sources of subtle bugs is testing against outdated code. Always sync your code to the WordPress installation before running tests, even when it doesn't seem necessary for your specific test case. This prevents confusing situations where your tests are running against different code than what you're editing.
+**Code in a separate folder than WordPress**: Write your code in one folder, synchronize to WordPress wp-content/plugins/yourplugin, test in WordPress. Do not risk losing your code if you rebuild your WordPress testing environment.
+code folder: ~/sites/phpunit-testing
+WordPress folder: ~/sites/wordpress
+sync to folder: ~/sites/wordpress/wp-content/plugins/phpunit-testing
+
+**Always synchronize before testing**: One of the most common sources of subtle bugs is testing against outdated code. Always synchronize your code to the WordPress installation before running tests, even when it doesn't seem necessary for your specific test case. This prevents confusing situations where your tests are running against different code than what you're editing.
+
+>Tip: Make a sync-to-wp.php file to synchronize your code to the WordPress installation.
 
 ## Crafting Effective Debugging Prompts
 
@@ -114,6 +121,42 @@ Please help me debug this methodically by:
 ```
 
 ## Methodical Debugging Approaches
+
+### Core Principles for Effective Testing and Debugging
+
+To get debugging right the first time, follow these principles:
+
+1. **Thoroughly understand the code context** - Take time to fully analyze the existing code structure, variables, and patterns before making changes
+
+2. **Avoid assumptions** - Never assume what values should be; instead, use what's already defined in the code
+
+3. **Maintain consistency** - Follow the existing patterns and coding style in the project
+
+4. **Think in terms of tests** - Remember that tests should verify specific inputs produce expected outputs, not hardcode assumptions
+
+5. **Use existing data** - Leverage data that's already defined rather than creating redundant variables or hardcoded values
+
+6. **Check your work** - Verify that your changes actually solve the problem without introducing new issues
+
+7. **Focus on practical functionality** - Focus on functional issues rather than minor formatting concerns
+
+### Test Structure Best Practices
+
+When writing or debugging tests, follow these structural guidelines:
+
+- **Define test data once**: All test values should be defined in a single place, typically at the class level
+  - **Cognitive load reduction**: Eliminates the mental overhead of tracking values across the file
+  - **Single source of truth**: If you need to change a test value, you only change it in one place
+  - **Self-documenting**: The structure of the test data array clearly shows what values are used for what purpose
+  - **Easier maintenance**: New developers can quickly understand the test structure without tracing values
+  - **Visual distinction**: Makes it easier to spot when a test is using a hardcoded value instead of a test data value
+- **Use the same data throughout**: The same values should be used for setup and assertions
+- **Create clear structure**: Code should be readable with a logical flow
+- **Use made-up values**: Test with deliberately non-standard values (of the correct data type) to ensure code isn't making assumptions
+  - For example, don't test with `$table_prefix = 'wp_'` (WordPress default) but use `$table_prefix = 'my_madeup_'` to catch code that assumes defaults
+  - This helps identify hidden assumptions in the code being tested
+
+### Debugging Principles
 
 Encourage the AI to follow these debugging principles:
 
@@ -278,6 +321,5 @@ I've added this hook:
 But it doesn't seem to be executing. How can I debug the WordPress hook execution sequence to find out why?
 ```
 
----
-
+## Conclusion
 Remember that AI is a tool to augment your debugging skills, not replace them. The most effective debugging happens when you combine the AI's ability to analyze patterns with your understanding of the specific context and codebase.
