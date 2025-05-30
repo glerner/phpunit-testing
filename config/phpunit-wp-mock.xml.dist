@@ -19,7 +19,7 @@
          verbose="true">
     <testsuites>
         <testsuite name="wp-mock">
-            <directory suffix="Test.php">../WP_Mock</directory>
+            <directory suffix=".php">../WP_Mock</directory>
         </testsuite>
     </testsuites>
 
