@@ -39,7 +39,14 @@ For WordPress plugin testing specifically, also include:
 - Local development environment details (Lando, Docker, etc.)
 - Confirmation that code has been synced to the WordPress installation
 
-**Always sync before testing**: One of the most common sources of subtle bugs is testing against outdated code. Always sync your code to the WordPress installation before running tests, even when it doesn't seem necessary for your specific test case. This prevents confusing situations where your tests are running against different code than what you're editing.
+**Code in a separate folder than WordPress**: Write your code in one folder, synchronize to WordPress wp-content/plugins/yourplugin, test in WordPress. Do not risk losing your code if you rebuild your WordPress testing environment.
+code folder: ~/sites/phpunit-testing
+WordPress folder: ~/sites/wordpress
+sync to folder: ~/sites/wordpress/wp-content/plugins/phpunit-testing
+
+**Always synchronize before testing**: One of the most common sources of subtle bugs is testing against outdated code. Always synchronize your code to the WordPress installation before running tests, even when it doesn't seem necessary for your specific test case. This prevents confusing situations where your tests are running against different code than what you're editing.
+
+>Tip: Make a sync-to-wp.php file to synchronize your code to the WordPress installation.
 
 ## Crafting Effective Debugging Prompts
 
@@ -314,6 +321,5 @@ I've added this hook:
 But it doesn't seem to be executing. How can I debug the WordPress hook execution sequence to find out why?
 ```
 
----
-
+## Conclusion
 Remember that AI is a tool to augment your debugging skills, not replace them. The most effective debugging happens when you combine the AI's ability to analyze patterns with your understanding of the specific context and codebase.

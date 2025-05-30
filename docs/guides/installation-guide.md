@@ -67,18 +67,55 @@ Alternatively, you can develop directly in your WordPress installation's plugins
 
 ### Option 1: Git Submodule (Recommended for Contributors)
 
+> There must be a local .git repository already (at minimum, run `git init`). See `docs/git-github-setup-guide.md` for proper setup of your local Git repository.
+
 ```bash
-# From your plugin's root directory
+# Always from your plugin's root directory
 git submodule add https://github.com/glerner/phpunit-testing.git tests/gl-phpunit-test-framework
 ```
+
+#### Update to the latest PHPUnit Testing Framework
+
+To pull updates from the PHPUnit testing framework submodule and use the latest version:
+
+```bash
+# Update the submodule to the latest commit from upstream
+# Always from your plugin's root directory
+git submodule update --remote --merge
+
+# Stage the updated submodule pointer in your main repo
+git add tests/gl-phpunit-test-framework
+
+# Commit the update in your main repo
+git commit -m "Update phpunit-testing submodule to latest upstream"
+```
+
+Alternatively, you can update manually:
+
+```bash
+cd tests/gl-phpunit-test-framework
+git checkout main      # or master, or whichever branch you want
+git pull origin main   # fetch latest changes
+cd ../..
+git add tests/gl-phpunit-test-framework
+git commit -m "Update phpunit-testing submodule"
+```
+
+Always commit the submodule pointer change in your main repo after updating.
+
+You should make a dedicated git commit in your main project specifically for the PHPUnit Framework submodule update. This is considered best practice for clarity and history tracking.
+
+- Submodule updates are independent of your main project’s code/content changes.
+- Keeping the update in a separate commit makes it easy to see when and why the test framework was updated.
+- This helps collaborators and reviewers quickly understand the change and roll back if needed.
+
 
 ### Option 2: Composer Package (Recommended for Standard Usage)
 
 ```bash
-# From your plugin's root directory
+# Always from your plugin's root directory
 composer require glerner/phpunit-testing --dev
 ```
-
 When you run the setup script later, your composer.json and the installed dependencies will be copied to your WordPress plugin directory.
 
 The next step is to copy composer.json
@@ -88,13 +125,47 @@ The next step is to copy composer.json
 cp tests/gl-phpunit-test-framework/composer.json tests/composer.json
 ```
 
+#### Keeping the PHPUnit Testing Framework Up to Date
+
+To update the phpunit-testing Composer package to the latest version:
+
+```bash
+# From your plugin's root directory
+composer update glerner/phpunit-testing
+```
+
+This will update the package and its dependencies to the latest versions allowed by your composer.json constraints.
+
+After updating, you should commit the changes to your lock file and any updated dependencies:
+
+```bash
+# From your plugin's root directory
+git add composer.lock
+# (and any other files changed by the update)
+git commit -m "Update phpunit-testing Composer package to latest version"
+```
+
+It is best practice to make this a dedicated commit, separate from your application code changes, for clarity and history tracking.
+
+
+
+## Copy the Setup script
+
+```bash
+mkdir tests/bin
+cp tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php tests/bin/setup-plugin-tests.php
+```
+Your most frequently used scripts will be in your tests/bin folder.
+
+Your tests will be in folders of your tests/ folder.
+
 ## Installing PHPUnit
+
+PHPUnit is installed automatically by this package.
 
 PHPUnit is the core testing framework we'll use. We recommend installing it via Composer in your plugin development directory (outside WordPress) as this framework also includes tools that will work before testing in WordPress, such as static code quality tests.
 
 This package requires PHPUnit 9.x due to compatibility requirements with other dependencies.
-
-PHPUnit is installed automatically by this package.
 
 If you wanted to install it manually, you would:
 
@@ -155,6 +226,86 @@ composer update
 
 This command will update all dependencies to their latest versions according to the version constraints in your `composer.json` file.
 
+## .gitignore Best Practices for WordPress Plugin Testing Projects
+
+A well-configured `.gitignore` keeps your repository clean by ignoring files and directories that are generated, environment-specific, or not needed in version control.
+
+**Recommended entries:**
+
+```gitignore
+# Composer dependencies and lock files
+/vendor/
+/composer.lock
+/tests/vendor/
+/tests/composer.lock
+/tests/composer.json
+
+# PHPUnit and test artifacts
+/build/
+/dist/
+/.phpunit.result.cache
+/phpunit.xml
+/tests/wp-tests-config.php
+/tests/bootstrap/
+/tests/config/
+/tests/bin/
+/tests/gl-phpunit-test-framework/.git
+/tests/gl-phpunit-test-framework/.github
+/tests/gl-phpunit-test-framework/.gitignore
+/tests/gl-phpunit-test-framework/.DS_Store
+/tests/gl-phpunit-test-framework/.idea/
+/tests/gl-phpunit-test-framework/node_modules/
+/tests/gl-phpunit-test-framework/vendor/
+/tests/gl-phpunit-test-framework/build/
+/tests/gl-phpunit-test-framework/coverage/
+/tests/gl-phpunit-test-framework/logs/
+/tests/gl-phpunit-test-framework/*.log
+/tests/gl-phpunit-test-framework/*.xml
+/tests/gl-phpunit-test-framework/*.lock
+/tests/gl-phpunit-test-framework/*
+!/tests/gl-phpunit-test-framework/.gitmodules
+!/tests/gl-phpunit-test-framework
+
+# Coverage reports
+coverage/
+build/
+logs/
+*.log
+
+# Test environment files (keep only samples)
+/tests/.env.testing
+/tests/.env.local
+/tests/.env
+.env
+.env.*
+!.env.sample*
+!/tests/.env.sample.testing
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+*.orig
+*~
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# WordPress test library
+/tmp/
+```
+
+**Notes:**
+- `/tests/composer.json` is usually ignored because dependencies for the test framework are managed by the framework itself or the main plugin project.
+- The submodule reference for the test framework is kept, but its internal files are ignored.
+- Adjust entries as needed for your project structure.
+
 ## Creating the Environment Configuration File
 
 The `.env.testing` file holds all environment-specific configuration for running tests. This file is required for the test framework to locate your WordPress installation, set up the test database, and know where your plugin or theme is installed for testing.
@@ -163,12 +314,13 @@ The `.env.testing` file holds all environment-specific configuration for running
 
 ### 1. Create Your `.env.testing` File
 
+> If you already have a `.env.testing`, review and update it to include any new settings.
+
 Start by copying the sample file:
 
 ```bash
 cp .env.sample.testing .env.testing
 ```
-> If you already have a `.env.testing`, review and update it to include any new or required settings.
 
 ### 2. Configure Database Settings for Tests
 
@@ -208,7 +360,17 @@ Example:
 /home/youruser/sites/wordpress/wp-content/plugins/my-awesome-plugin
 ```
 
-### 4. Additional Test Configuration (Optional)
+### 4. Configure Command Line or SSH
+```bash
+# Ensure your .env.testing has the correct SSH_COMMAND setting:
+# - SSH_COMMAND=none          # For local development with direct DB access
+# - SSH_COMMAND=ssh           # Already in an SSH session with DB access (don't launch another SSH session)
+# - SSH_COMMAND=lando ssh     # For Lando environments
+# - SSH_COMMAND=yourcommand   # Whatever command you need for your specific environment
+SSH_COMMAND=lando ssh
+```
+
+### 5. Additional Test Configuration (Optional)
 
 - `TEST_ERROR_LOG`: Path to error log file
 - `PHP_MEMORY_LIMIT`: Memory limit for PHP during tests
@@ -244,16 +406,8 @@ For integration tests that interact with a real WordPress installation, you'll n
 
 This framework provides a PHP script to set up the WordPress test environment. The script needs to access both the file system and database, which may require different environments depending on your setup.
 
-Before running the script, make sure your `.env.testing` file has the correct `SSH_COMMAND` setting for your environment:
+Before running the script, make sure your `.env.testing` file has the correct `SSH_COMMAND` setting for your environment.
 
-```bash
-# First, ensure your .env.testing has the correct SSH_COMMAND setting:
-# - SSH_COMMAND=none          # For local development with direct DB access
-# - SSH_COMMAND=ssh           # Already in an SSH session with DB access (don't launch another SSH session)
-# - SSH_COMMAND=lando ssh     # For Lando environments
-# - SSH_COMMAND=yourcommand   # Whatever command you need for your specific environment
-
-```
 
 Then run the setup script from your plugin development directory. This will install the test framework in your WordPress plugin directory:
 ```bash

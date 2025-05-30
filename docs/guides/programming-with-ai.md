@@ -15,6 +15,25 @@ IMPORTANT: Before making any changes:
 
 This prompt should be used at the beginning of any significant code change task, especially when adding new features or modifying existing architecture.
 
+## Avoiding Redundancy and Duplicates
+- Always check for and remove duplicate function/method signatures, docblocks, or code blocks before submitting or accepting changes.
+- Use code search and file-wide review before every commit.
+
+## Session Awareness & File State Consistency
+- Always re-read the entire file before making or proposing changes, especially after collaborative or multi-step editing.
+- Never assume the file state; verify it before every change.
+
+## Atomic Commits & Change Descriptions
+- Make atomic (minimal, isolated) changes—only touch what is necessary.
+- Always describe exactly what is being changed and why in commit messages or PR descriptions.
+
+## Pre-Commit/Pre-Review Checklist
+- [ ] No duplicate code, docblocks, or function signatures
+- [ ] Naming conventions and parameter consistency
+- [ ] Docblocks match signatures
+- [ ] No unintentional removals/additions
+- [ ] All changes are minimal and well-described
+
 ### Understanding the Framework's Configuration System
 
 The PHPUnit testing framework uses a specific approach to configuration management that's important to understand:
@@ -29,7 +48,7 @@ The PHPUnit testing framework uses a specific approach to configuration manageme
    ```php
    // CORRECT: Using the framework function
    $plugin_slug = \WP_PHPUnit_Framework\get_setting('YOUR_PLUGIN_SLUG', 'default-value');
-   
+
    // INCORRECT: Direct environment access
    $plugin_slug = getenv('YOUR_PLUGIN_SLUG');
    ```

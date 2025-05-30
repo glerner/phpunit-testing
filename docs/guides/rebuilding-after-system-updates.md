@@ -50,11 +50,68 @@ sudo systemctl restart docker
 
 ## Rebuilding Lando Environment
 
-After Docker is cleaned up and restarted, rebuild your Lando environment:
+After Docker is cleaned up and restarted, follow these steps to properly rebuild your Lando environment without accumulating disk space:
 
-```bash
-# Navigate to your WordPress directory
-cd /path/to/wordpress
+1. First, ensure you're in your project directory and stop any running Lando instances:
+   ```bash
+   cd /path/to/your/project
+   lando poweroff  # or 'lando shutdown' - both work the same way
+   ```
+
+2. Remove any existing Lando files and caches:
+   ```bash
+   # Remove Lando's project-specific files
+   rm -rf .lando.local.yml .lando.json .lando/
+
+   # Clear Lando's global cache
+   lando --clear
+   ```
+
+3. Rebuild with a clean slate:
+   ```bash
+   # Start with a fresh rebuild
+   lando rebuild -y
+
+   # If rebuild fails, try with a more aggressive cleanup
+   lando rebuild --clean -y
+   ```
+
+4. After successful rebuild, clean up any remaining resources:
+   ```bash
+   # Prune unused Docker resources
+   docker system prune -f
+
+   # Remove any dangling images
+   docker image prune -f
+
+   # Clean up the Lando build cache
+   docker builder prune -f
+   ```
+
+5. Verify everything is working:
+   ```bash
+   # Check application status
+   lando info
+
+   # List all running Lando apps and containers
+   lando list
+   ```
+
+### Preventing Future Disk Bloat
+
+To avoid disk space issues with frequent rebuilds:
+
+1. Always use `lando rebuild` instead of `lando start` when making configuration changes
+2. Regularly clean up unused Docker resources:
+   ```bash
+   # Weekly maintenance
+   docker system prune -f
+   lando poweroff
+   ```
+3. Consider adding these to your shell's profile for convenience:
+   ```bash
+   alias lando-clean="docker system prune -f && lando poweroff"
+   alias lando-fresh="lando-clean && lando rebuild -y"
 
 # Rebuild the existing Lando app
 lando rebuild -y
