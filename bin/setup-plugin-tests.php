@@ -32,7 +32,7 @@ use function WP_PHPUnit_Framework\esc_cli;
  * PROJECT_DIR should be your-plugin
 */
 define('SCRIPT_DIR', __DIR__);
-define('PROJECT_DIR', dirname(SCRIPT_DIR,2);
+define('PROJECT_DIR', dirname(SCRIPT_DIR,2));
 
 // Source directories (from project root)
 $framework_bin_source    = PROJECT_DIR . '/tests/gl-phpunit-test-framework/bin';

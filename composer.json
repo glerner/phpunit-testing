@@ -47,6 +47,8 @@
         "test:framework": "phpunit -c config/phpunit-framework-tests.xml.dist",
         "phpcs": "phpcs",
         "phpcbf": "composer run-script spaces_to_tabs && phpcbf",
+        "check-style": "phpcs -p --standard=phpcs.xml",
+        "fix-style": "phpcbf -p --standard=phpcs.xml",
         "spaces_to_tabs": "find src config tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;",
         "analyze": "vendor/bin/phpstan analyse --configuration=phpstan.neon",
         "sync:wp": "php bin/sync-to-wp.php",
@@ -55,6 +57,8 @@
         "lando:test": "lando ssh -c 'cd /app/wp-content/plugins/gl-phpunit-testing-framework && composer test'"
     },
     "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true
