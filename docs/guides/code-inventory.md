@@ -4,6 +4,7 @@ This document provides an inventory of key functions, classes, and variables in 
 
 ## Table of Contents
 
+- [Test Class Naming Conventions](#test-class-naming-conventions)
 - [Namespace](#namespace)
 - [Exception Handling](#exception-handling)
 - [Important Global Variables](#important-global-variables)
@@ -44,6 +45,138 @@ This document provides an inventory of key functions, classes, and variables in 
   - [phpunit-integration.xml.dist](#phpunit-integrationxmldist)
   - [phpunit-unit.xml.dist](#phpunit-unitxmldist)
   - [phpunit-wp-mock.xml.dist](#phpunit-wp-mockxmldist)
+
+## WordPress + PSR Standards
+
+### Modern Approach (Adopted)
+
+1. **Directory Structure**:
+   ```
+   plugin-name/
+   ├── src/                    # All PHP classes (PSR-4 autoloaded)
+   │   ├── Model/            # Domain models
+   │   ├── Service/          # Business logic
+   │   └── Controller/       # Request handlers
+   ├── tests/                # Test files (WordPress style)
+   │   ├── Unit/           # Unit tests
+   │   ├── Integration/     # Integration tests
+   │   └── WP-Mock/        # WP-Mock tests
+   ├── assets/              # CSS, JS, images (kebab-case)
+   ├── templates/          # Template files (kebab-case)
+   ├── composer.json       # PSR-4 autoloading config
+   └── plugin-name.php      # Main plugin file (kebab-case)
+   ```
+
+2. **Naming Conventions**:
+
+   | Type | Location | Naming Convention | Example |
+   |------|----------|-------------------|---------|
+   | **Class Files** | `src/` | Match class name (PascalCase) | `Journey_Questions_Model.php` |
+   | **Test Files** | `tests/` | `test-{feature}.php` (kebab-case) | `test-journey-questions.php` |
+   | **Main Plugin File** | Root | `plugin-name.php` (kebab-case) | `reinvent-coaching-process.php` |
+   | **Assets** | `assets/` | kebab-case | `main.js`, `admin-styles.css` |
+   | **Templates** | `templates/` | kebab-case | `single-journey.php` |
+
+3. **AI Prompting Guidelines**:
+   When requesting code generation, specify:
+   ```
+   Follow these naming conventions:
+   - Class files: PSR-4 PascalCase matching class name (e.g., `Journey_Questions_Model.php`)
+   - Test files: WordPress kebab-case (e.g., `test-journey-questions.php`)
+   - Non-PHP files: kebab-case (e.g., `admin-styles.css`)
+   ```
+
+4. **Autoloading**:
+   - PSR-4 autoloading via Composer
+   - Namespaces match directory structure
+   - Example: `GL_Reinvent\Model\Journey_Questions_Model` in `src/Model/Journey_Questions_Model.php`
+
+### Traditional WordPress Style (Legacy)
+
+1. **Directory Structure**:
+   ```
+   plugin-name/
+   ├── includes/
+   │   ├── class-plugin-name.php
+   │   └── class-plugin-name-core.php
+   └── plugin-name.php
+   ```
+
+2. **Loading**:
+   - Manual file includes/requires
+   - No namespacing
+   - Global functions and classes
+
+### Why Modern Approach?
+- Better code organization
+- Improved IDE support
+- Easier testing
+- Better dependency management
+- Industry standard practices
+
+## Test Class Naming Conventions
+
+Test classes must follow these naming conventions:
+
+1. **Test Class Prefix**: All test classes must be prefixed with `Test_`
+   ```php
+   // Correct:
+   class Test_Journey_Questions_Model extends Unit_Test_Case
+
+   // Incorrect:
+   class Journey_Questions_Model_Test extends Unit_Test_Case
+   ```
+
+## Test Framework File and Directory Conventions
+
+The test framework follows PHPUnit's standard file and directory naming conventions rather than WordPress conventions for the following components:
+
+### Directory Structure
+```
+src/
+├── Integration/      # Integration test base classes
+├── Stubs/           # Mock and stub classes
+├── Unit/            # Unit test base classes
+└── WP_Mock/         # WP_Mock test base classes
+```
+
+### File Naming
+- Base test classes use `PascalCase` (e.g., `Unit_Test_Case.php`)
+- Stub classes use `PascalCase` (e.g., `WP_UnitTestCase.php`)
+- Test files use `kebab-case` (e.g., `test-journey-questions-model.php`)
+
+### Rationale
+This structure was chosen because:
+1. It aligns with PHPUnit's conventions that most PHP developers are familiar with
+2. The test framework is a standalone component that may be used outside WordPress
+3. It maintains consistency with PHP ecosystem standards
+
+Note: This is an exception to WordPress naming conventions and only applies to the test framework's internal structure. Your actual test files should still follow WordPress naming conventions.
+
+
+2. **File Naming**: Test files should be named to match their class name in lowercase with hyphens:
+   ```
+   test-journey-questions-model.php  // Contains Test_Journey_Questions_Model
+   ```
+
+3. **Test Method Naming**: Test methods should be descriptive and use snake_case:
+   ```php
+   public function test_get_phase_description_returns_expected_structure()
+   ```
+
+4. **Namespaces**: Tests should use the appropriate namespace based on their test type:
+   ```php
+   // For Unit tests (isolated tests without WordPress dependencies)
+   namespace WP_PHPUnit_Framework\Unit;
+
+   // For Integration tests (tests that interact with WordPress core)
+   namespace WP_PHPUnit_Framework\Integration;
+
+   // For WP_Mock tests (tests that mock WordPress functions)
+   namespace WP_PHPUnit_Framework\WP_Mock;
+   ```
+
+   The base namespace `WP_PHPUnit_Framework` should be used for all test types, with the appropriate sub-namespace indicating the test type.
 
 ## Namespace
 
@@ -1177,8 +1310,10 @@ function generate_wp_tests_config(
 
 **Overview**: The bootstrap files work together to create isolated test environments for each test type (unit, wp-mock, integration). Each test type has its own bootstrap file with specific requirements and dependencies.
 
+**Note**: PHPUnit will use `*.xml` files if they exist, falling back to `*.xml.dist` files. This allows for local configuration overrides.
+
 **Execution Flow**:
-1. PHPUnit configuration files (phpunit-unit.xml.dist, phpunit-wp-mock.xml.dist, phpunit-integration.xml.dist) set the PHPUNIT_BOOTSTRAP_TYPE environment variable
+1. PHPUnit configuration files (phpunit-unit.xml.dist, phpunit-wp-mock.xml.dist, phpunit-integration.xml.dist) set the PHPUNIT_BOOTSTRAP_TYPE environment variable. Note: User can override with *.xml instead of *.xml.dist.
 2. All test types load bootstrap.php as their entry point
 3. bootstrap.php loads settings from .env.testing and provides the get_setting function
 4. bootstrap.php then loads the specific bootstrap file based on the test type
@@ -1300,6 +1435,8 @@ When executing PHP commands in Lando environments, the following considerations 
 
 ## PHPUnit Configuration Files
 
+Note: User can override with *.xml instead of *.xml.dist.
+
 ### `phpunit.xml.dist`
 
 **Location**: `/config/phpunit.xml.dist`
@@ -1308,7 +1445,7 @@ When executing PHP commands in Lando environments, the following considerations 
 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
-- Test directories: `../tests/Unit`, `../tests/WP_Mock`, `../tests/Integration`
+- Test directories: `../tests/unit`, `../tests/wp-mock`, `../tests/integration`
 
 ### `phpunit-unit.xml.dist`
 
@@ -1318,7 +1455,7 @@ When executing PHP commands in Lando environments, the following considerations 
 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
-- Test directory: `../tests/Unit`
+- Test directory: `../tests/unit`
 
 ### `phpunit-wp-mock.xml.dist`
 
@@ -1328,7 +1465,7 @@ When executing PHP commands in Lando environments, the following considerations 
 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
-- Test directory: `../tests/WP_Mock`
+- Test directory: `../tests/wp-mock`
 
 ### `phpunit-integration.xml.dist`
 
@@ -1338,7 +1475,7 @@ When executing PHP commands in Lando environments, the following considerations 
 
 **Configuration**:
 - Bootstrap file: `../tests/bootstrap/bootstrap.php`
-- Test directory: `../tests/Integration`
+- Test directory: `../tests/integration`
 
 ### `colored_message()`
 
@@ -1397,17 +1534,12 @@ function print_usage(): void
 
 **Signature**:
 ```php
-function build_phpunit_command($config_file, $test_type, $options)
+function build_phpunit_command($test_type, $options, $test_run_path)
 ```
 
 **Purpose**: Constructs the PHPUnit command with appropriate configuration file and options based on the test type.
 
 **Parameters**:
-- `$config_file`: Path to the PHPUnit configuration file
-  - Type: string
-  - Required: Yes
-  - Example: 'phpunit-unit.xml.dist'
-
 - `$test_type`: Type of tests to run
   - Type: string
   - Required: Yes
@@ -1418,6 +1550,11 @@ function build_phpunit_command($config_file, $test_type, $options)
   - Type: array
   - Required: Yes
   - Example: ['--filter=test_format_php_command', '--verbose']
+
+- `$test_run_path`: The path where tests will be executed from
+  - Type: string
+  - Required: Yes
+  - Example: '/app/wp-content/plugins/yourplugin/tests'
 
 **Return Value**:
 - Type: string

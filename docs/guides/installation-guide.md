@@ -161,7 +161,8 @@ To update the phpunit-testing Composer package to the latest version:
 
 ```bash
 # From your plugin's root directory
-composer update glerner/phpunit-testing
+cd tests/gl-phpunit-test-framework/
+composer update
 ```
 
 This will update the package and its dependencies to the latest versions allowed by your composer.json constraints.
@@ -181,13 +182,16 @@ It is best practice to make this a dedicated commit, separate from your applicat
 
 ## Copy the Setup script
 
+From your plugin root folder:
+
 ```bash
 mkdir tests/bin
 cp tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php tests/bin/setup-plugin-tests.php
+cp tests/gl-phpunit-test-framework/config/* ./config/
 ```
-Your most frequently used scripts will be in your tests/bin folder.
-
-Your tests will be in folders of your tests/ folder.
+- Your most frequently used scripts will be in your tests/bin folder.
+- Your tests will be in folders of your tests/ folder.
+- You won't often need anything in your tests/gl-phpunit-test-framework folder.
 
 ## Installing PHPUnit
 

@@ -46,7 +46,7 @@ sync to folder: ~/sites/wordpress/wp-content/plugins/phpunit-testing
 
 **Always synchronize before testing**: One of the most common sources of subtle bugs is testing against outdated code. Always synchronize your code to the WordPress installation before running tests, even when it doesn't seem necessary for your specific test case. This prevents confusing situations where your tests are running against different code than what you're editing.
 
->Tip: Make a sync-to-wp.php file to synchronize your code to the WordPress installation.
+>Tip: Make a sync-to-wp.php file to synchronize your code to the WordPress installation. There is one in `tests/gl-phpunit-test-framework/bin/sync-to-wp.php` and a companion `sync-and-test.php`.
 
 ## Crafting Effective Debugging Prompts
 
@@ -215,6 +215,51 @@ I'm breaking down this complex operation into individual commands to test each p
 
 Which component appears to be failing?
 ```
+
+## Composer and Dependency Issues
+
+### Common Symptoms
+- "Class not found" errors
+- Inconsistent behavior between environments
+- Tests failing with autoloading issues
+
+### Quick Fixes
+1. First try regenerating the autoloader:
+   ```bash
+   composer dump-autoload -o
+   ```
+
+2. If that doesn't work, perform a full Composer cleanup:
+   ```bash
+   rm -rf vendor/ composer.lock
+   composer install
+   composer dump-autoload -o
+   ```
+
+3. For complete environment rebuilds, see [Composer Cleanup Guide](./composer-cleanup.md)
+
+## Environment and Sync Troubleshooting
+
+### Common Sync Issues
+1. **Out-of-sync Code**
+   - Symptom: Tests pass but changes aren't reflected
+   - Solution: Run `bin/sync-and-test.php` to ensure code is properly synchronized
+   - Verify: Check file timestamps in WordPress plugin directory
+
+2. **Environment Variable Mismatches**
+   - Symptom: Tests work locally but fail in CI/CD
+   - Solution: Ensure `.env.testing` is properly copied to the WordPress plugin directory
+   - Verify: Compare environment variables between environments
+
+3. **Path Resolution Issues**
+   - Symptom: File not found errors or incorrect paths
+   - Solution: Use WordPress functions for path resolution
+   - Example: `plugin_dir_path(__FILE__)` instead of hardcoded paths
+
+4. **Cache Problems**
+   - Symptom: Old code seems to be running
+   - Solution: Clear opcache and WordPress object cache
+   - Command: `wp cache flush` (if WP-CLI is available)
 
 ## Common Pitfalls to Avoid
 

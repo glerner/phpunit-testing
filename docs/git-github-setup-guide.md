@@ -264,6 +264,12 @@ git config --global credential.helper store
 
 ## Troubleshooting
 
+### Remove a file from Staged that shouldn't be
+
+```bash
+git rm --cached filename
+```
+
 ### "Remote origin already exists" error
 ```bash
 git remote remove origin
@@ -301,7 +307,7 @@ If you've generated a new Personal Access Token and are getting authentication e
    # Replace with your repository's full URL
    echo "url=https://github.com/username/repository-name.git" | git credential reject
    ```
-   
+
    **Alternative format using attributes** (works for both cases):
    ```bash
    git credential reject <<EOF
@@ -311,7 +317,7 @@ If you've generated a new Personal Access Token and are getting authentication e
    # path=username/repository-name.git
    EOF
    ```
-   
+
    The URL format is preferred as it's more concise and handles all URL components automatically.
 
 2. The next time you push or pull, Git will prompt for your credentials. Use:

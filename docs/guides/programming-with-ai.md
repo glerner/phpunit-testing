@@ -1,5 +1,103 @@
 # Programming with AI Assistance
 
+## Development Workflow and Standards
+
+### Development Process
+1. **Sync**: Use `bin/sync-and-test.php` to synchronize code to the WordPress environment and run tests
+2. **Test**: Ensure all tests pass and PHPStan level 5 compliance is maintained
+3. **Commit**: Make atomic commits with clear, descriptive messages
+4. **Document**: Update documentation in a separate commit if needed
+
+### Code Quality Requirements
+- PHPStan level 5 compliance is required for all code
+- WordPress coding standards must be followed
+- Tests should be run frequently during development
+- Use PHPCS for code style validation
+- Maintain clear separation between development and WordPress environments
+- Before pushing to the public repository (Github):
+  - All tests must pass
+  - PHPStan level 5 compliance must be met
+  - Documentation should be up to date
+
+## WordPress + PSR Development Standards
+
+### Directory Structure
+```
+plugin-name/
+├── src/                    # All PHP classes (PSR-4 autoloaded)
+│   ├── Model/            # Domain models
+│   ├── Service/          # Business logic
+│   └── Controller/       # Request handlers
+├── tests/                # Test files (WordPress style)
+│   ├── Unit/            # Unit tests
+│   ├── Integration/      # Integration tests
+│   └── WP-Mock/         # WP-Mock tests
+├── assets/              # CSS, JS, images (kebab-case)
+├── templates/          # Template files (kebab-case)
+├── composer.json       # PSR-4 autoloading config
+└── plugin-name.php      # Main plugin file (kebab-case)
+```
+
+### Naming Conventions
+
+| Type | Location | Naming Convention | Example |
+|------|----------|-------------------|---------|
+| **Class Files** | `src/` | Match class name (PascalCase) | `Journey_Questions_Model.php` |
+| **Test Files** | `tests/` | `test-{feature}.php` (kebab-case) | `test-journey-questions.php` |
+| **Main Plugin File** | Root | `plugin-name.php` (kebab-case) | `reinvent-coaching-process.php` |
+| **Assets** | `assets/` | kebab-case | `main.js`, `admin-styles.css` |
+| **Templates** | `templates/` | kebab-case | `single-journey.php` |
+
+### AI Prompting Guidelines
+When requesting code generation, use this exact format:
+
+```
+Follow these naming conventions:
+- Class files: PSR-4 PascalCase matching class name (e.g., `Journey_Questions_Model.php`)
+- Test files: WordPress kebab-case (e.g., `test-journey-questions.php`)
+- Non-PHP files: kebab-case (e.g., `admin-styles.css`)
+- Directories: kebab-case (e.g., `wp-content/`)
+```
+
+### Autoloading Configuration
+```json
+{
+    "autoload": {
+        "psr-4": {
+            "GL_Reinvent\\": "src/"
+        }
+    }
+}
+```
+
+### Key Points for AI Code Generation
+1. **Class Files**:
+   - Must match class name exactly (case-sensitive)
+   - Example: `class Journey_Questions_Model` → `src/Model/Journey_Questions_Model.php`
+
+2. **Test Files**:
+   - Use `test-` prefix
+   - Describe feature being tested
+   - Example: `tests/Unit/test-journey-questions.php`
+
+3. **Non-PHP Files**:
+   - Always use kebab-case
+   - Examples: `admin-styles.css`, `main.js`, `single-journey.php`
+
+### Key Benefits
+1. **Better Organization**: Clear separation of concerns
+2. **Improved Tooling**: Better IDE support and static analysis
+3. **Easier Testing**: Simplified dependency injection and mocking
+4. **Modern Standards**: Follows current PHP ecosystem practices
+5. **Scalability**: Easier to maintain as the codebase grows
+
+### Migration Guidelines
+1. Keep existing code working during transition
+2. Move files to new structure gradually
+3. Update namespaces and imports
+4. Update autoloader configuration
+5. Update test paths and namespaces
+
 ## Best Practices for AI-Assisted Development
 
 ### What Prompt Should You Use

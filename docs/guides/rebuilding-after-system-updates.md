@@ -116,8 +116,8 @@ To avoid disk space issues with frequent rebuilds:
 # Rebuild the existing Lando app
 lando rebuild -y
 
-# Note: When you run 'lando rebuild', it will download all packages
-# and rebuild everything from scratch. This process can take several minutes.
+>Note: When you run 'lando rebuild', it will download all packages
+and rebuild everything from scratch. This process can take several minutes.
 
 # if lando rebuild didn't start it:
 lando start
@@ -145,7 +145,7 @@ After Lando is running properly, rebuild your Composer environment:
 # Navigate to your plugin development directory
 # (where the composer.json file is located)
 # Not your WordPress directory
-cd /path/to/phpunit-testing
+cd /path/to/yourplugin
 
 # Clear Composer cache (optional but recommended after system updates)
 composer clear-cache

@@ -66,10 +66,10 @@ This tutorial provides a comprehensive guide to setting up and organizing PHPUni
 
 ### Framework Structure
 
-The testing framework is designed to be included as a submodule or Composer package within your plugin project:
+The GL WP PHPUnit Test Framework is designed to be included as a submodule or Composer package within your plugin project's test/ folder. It is not intended to be used as a standalone package.
 
 ```
-phpunit-testing/                # The framework repository
+gl-phpunit-test-framework/                # The framework repository
 ├── src/                        # Source code for the testing framework
 │   ├── Unit/                   # Base classes for unit tests
 │   │   └── Unit_Test_Case.php
