@@ -77,9 +77,9 @@ function get_setting( string $name, mixed $default = null ): mixed {
     // Silently log critical setting issues to error log without screen output
     if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
         if (empty($loaded_settings)) {
-            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, $error_log_file);
+            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'] . "\n\n", 3, $error_log_file);
         } else if (!isset($loaded_settings[$name])) {
-            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'], 3, $error_log_file);
+            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'] . "\n\n", 3, $error_log_file);
         }
     }
 
@@ -543,7 +543,8 @@ function load_settings_file( string $env_file ): array {
  * @return array PHPUnit database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
  */
 function get_phpunit_database_settings( array $wp_db_settings, ?string $db_name = null, ?string $table_prefix = null ): array {
-	// Use WordPress table prefix if none provided
+
+    // Use WordPress table prefix if none provided
 	if ( empty( $table_prefix ) ) {
 		$table_prefix = $wp_db_settings['table_prefix'] ?? 'wp_';
 	}

@@ -5,16 +5,18 @@
  * Validates MySQL connection parameters and SQL queries for safety and correctness.
  * Returns WP_Error objects in a WordPress environment, or throws exceptions otherwise.
  *
- * @package    phpunit-testing
+ * @package    WP_PHPUnit_Framework
  * @author     Your Name
  * @since      1.0.0
  */
 
-if ( ! class_exists( 'WP_MySQL_Parameter_Validator' ) ) {
+namespace WP_PHPUnit_Framework\Experimental\Security;
+
+if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 	/**
-	 * Class WP_MySQL_Parameter_Validator
+	 * Class MySQL_Parameter_Validator
 	 */
-	class WP_MySQL_Parameter_Validator {
+	class MySQL_Parameter_Validator {
 		/**
 		 * Validate MySQL host parameter.
 		 *

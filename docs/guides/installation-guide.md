@@ -37,6 +37,22 @@ The framework includes a comprehensive set of development tools to support diffe
 
 ## Prerequisites
 
+### Composer Configuration
+
+To prevent class loading conflicts between your project and the testing framework, add this to your project's `composer.json`:
+
+```json
+"autoload-dev": {
+    "exclude-from-classmap": [
+        "**/tests/gl-phpunit-test-framework/vendor/"
+    ]
+}
+```
+
+This ensures the testing framework's dependencies won't conflict with your project's dependencies.
+
+### System Requirements
+
 Before installing the testing tools, ensure you have:
 
 - PHP 8.0 or higher (for WordPress, should use PHP 8.0+)
@@ -199,7 +215,7 @@ PHPUnit is installed automatically by this package.
 
 PHPUnit is the core testing framework we'll use. We recommend installing it via Composer in your plugin development directory (outside WordPress) as this framework also includes tools that will work before testing in WordPress, such as static code quality tests.
 
-This package requires PHPUnit 9.x due to compatibility requirements with other dependencies.
+This package requires PHPUnit 11.x due to compatibility requirements with other dependencies.
 
 If you wanted to install it manually, you would:
 
@@ -209,11 +225,11 @@ cd ~/sites/your-plugin-project
 
 # Add PHPUnit as a dev dependency
 # This will create or update your composer.json
-composer require --dev phpunit/phpunit ^9.0
+composer require --dev phpunit/phpunit ^11.0
 ```
 *Do Not* run the default PHPUnit installation instructions. This package has much better installation, instructions below.
 
-> **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+ and PHP 8.0+, PHPUnit 9.x is recommended.
+> **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+ and PHP 8.0+, PHPUnit 11.x is recommended.
 
 ## Installing WP_Mock
 
@@ -653,12 +669,18 @@ Here's a sample `composer.json` configuration for a WordPress plugin with testin
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
-        "php": ">=7.4"
+        "php": ">=8.2"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WP_PHPUnit_Framework\\": "tests/gl-phpunit-test-framework/src/"
+        }
     },
     "require-dev": {
         "phpunit/phpunit": "^9.5",
         "10up/wp_mock": "^0.4",
         "brain/monkey": "^2.6",
+        "glerner/phpunit-testing": "dev-main"
         "mockery/mockery": "^1.4",
         "yoast/phpunit-polyfills": "^1.0"
     },

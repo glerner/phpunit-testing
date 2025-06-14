@@ -321,8 +321,8 @@ function install_test_suite(
         $use_ssh = true;
     }
 
-    // Determine if we're targeting a Lando environment based on SSH_COMMAND
-    $targeting_lando = $ssh_command === 'lando ssh';
+    // Determine if we're targeting a Lando environment based on SSH_COMMAND, which could have connection parameters
+    $targeting_lando = strpos($ssh_command, 'lando ssh') === 0;
 
     if ($targeting_lando) {
         echo "Using standard Lando database configuration...\n";

@@ -11,11 +11,12 @@ This repository contains a comprehensive testing framework designed specifically
 
 ## Features
 
+- **Self-Contained**: The framework manages its own dependencies via its `composer.json`. When framework developers update the submodule, you don't need to modify your project's composer file - just update the submodule.
 - **Modular Design**: Use only what you need - from basic test classes to complete development environments
 - **WordPress Integration**: Specialized tools for testing WordPress hooks, filters, and functions
 - **Clean Separation of Test Types**: Unlike most WordPress testing approaches, this framework maintains complete separation between different test types:
-  - Dedicated directories for each test type (`tests/unit/`, `tests/wp-mock/`, `tests/integration/`)
-  - Specialized configuration files for each test type (`phpunit-unit.xml.dist`, etc.)
+  - Dedicated directories for each test type (`tests/Unit/`, `tests/WP_Mock/`, `tests/Integration/`)
+  - Specialized configuration files for each test type (`phpunit-unit.xml.dist`, etc.). Copy .xml.dist to .xml to modify if needed.
   - Type-specific bootstrap files that load only what's needed
   - Simple execution through dedicated Composer scripts (`test:unit`, `test:wp-mock`, `test:integration`)
 - **Multiple Test Types**: Support for unit tests, integration tests, and WordPress-specific tests

@@ -1,35 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
-         bootstrap="../bootstrap/bootstrap.php"
-         backupGlobals="false"
-         backupStaticAttributes="false"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.1/phpunit.xsd"
+         bootstrap="bootstrap.php"
          colors="true"
-         convertErrorsToExceptions="true"
-         convertNoticesToExceptions="true"
-         convertWarningsToExceptions="true"
-         processIsolation="false"
          stopOnFailure="false"
          executionOrder="random"
          failOnWarning="true"
          failOnRisky="true"
-         failOnEmptyTestSuite="true"
-         beStrictAboutOutputDuringTests="true"
-         beStrictAboutTodoAnnotatedTests="true"
-         verbose="true">
+         failOnEmptyTestSuite="true">
     <testsuites>
         <testsuite name="unit">
             <directory suffix=".php">../Unit</directory>
+            <exclude>../Unit/Unit_Test_Case.php</exclude>
+            <exclude>../../src/Unit/Unit_Test_Case.php</exclude>
+            <exclude>../gl-phpunit-test-framework/src/Unit/Unit_Test_Case.php</exclude>
+            <exclude>../framework/unit/Unit_Test_Case.php</exclude>
+            <exclude>WP_PHPUnit_Framework\Unit\Unit_Test_Case</exclude>
         </testsuite>
     </testsuites>
 
-    <coverage processUncoveredFiles="true">
+    <coverage includeUncoveredFiles="true">
         <include>
-            <directory suffix=".php">../src</directory>
+            <directory suffix=".php">../../src</directory>
         </include>
         <exclude>
-            <directory>../vendor</directory>
-            <directory>../templates</directory>
+            <directory>../../vendor</directory>
+            <directory>../../templates</directory>
         </exclude>
         <report>
             <clover outputFile="build/logs/clover-unit.xml"/>
@@ -45,4 +41,5 @@
         <ini name="error_reporting" value="E_ALL"/>
         <ini name="memory_limit" value="512M"/>
     </php>
+    <!-- Note: SkipBaseTestCaseListener is now registered in bootstrap.php -->
 </phpunit>

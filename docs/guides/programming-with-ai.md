@@ -8,6 +8,34 @@
 3. **Commit**: Make atomic commits with clear, descriptive messages
 4. **Document**: Update documentation in a separate commit if needed
 
+## Project Structure and File Locations
+
+### Key Directories
+- **Reinvent Project**: `~/sites/reinvent/`
+  - Main project directory containing WordPress plugin code and tests
+  - Contains the PHPUnit Testing Framework as a submodule
+
+- **Reinvent as WordPress Plugin**: `~/sites/wordpress/wp-content/plugins/gl-reinvent/`
+  - Deployment target for testing
+  - Updated via sync scripts from the main project
+  - Never edit files here directly
+
+- **PHPUnit Testing Source Code**: `~/sites/phpunit-testing/`
+  - Source code for the testing framework
+  - Primary location for framework changes
+
+- **PHPUnit Testing as Submodule**: `~/sites/reinvent/tests/gl-phpunit-test-framework/`
+  - Git submodule reference to the testing framework
+  - Do not modify directly
+  - Changes should be made in the source directory and synced
+
+### Workflow Guidelines
+1. Make changes in the appropriate source directory
+2. For framework changes, work in `~/sites/phpunit-testing/`
+3. For plugin changes, work in `~/sites/reinvent/`
+4. Use sync scripts to deploy to WordPress environment
+5. Never modify files in the deployed or WordPress plugin directory directly
+
 ### Code Quality Requirements
 - PHPStan level 5 compliance is required for all code
 - WordPress coding standards must be followed

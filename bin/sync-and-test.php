@@ -27,27 +27,44 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bin;
 
-/* Define script constants as namespace constants
- * SCRIPT_DIR should be your-plugin/bin
- * PROJECT_DIR should be your-plugin
-*/
+// Define base paths
 define('PROJECT_DIR', dirname(__DIR__));
 define('SCRIPT_DIR', PROJECT_DIR . DIRECTORY_SEPARATOR . 'bin');
 define('TESTS_DIR', PROJECT_DIR . DIRECTORY_SEPARATOR . 'tests');
 
-// Load test framework directory from .env or use default
-$test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
-define('PHPUNIT_FRAMEWORK_DIR', TESTS_DIR . DIRECTORY_SEPARATOR . $test_framework_dir);
+// First, detect the framework location without using get_setting()
+$test_framework_dir = 'gl-phpunit-test-framework'; // Default value
+$phpunit_framework_dir = TESTS_DIR . DIRECTORY_SEPARATOR . $test_framework_dir;
+
+// Check if we're in the framework itself (development mode)
+if (file_exists(PROJECT_DIR . '/bin/framework-functions.php')) {
+    $phpunit_framework_dir = PROJECT_DIR;
+}
+// Check if installed via Composer
+elseif (is_dir(PROJECT_DIR . '/vendor/glerner/phpunit-testing')) {
+    $phpunit_framework_dir = PROJECT_DIR . '/vendor/glerner/phpunit-testing';
+}
+
+// Define the framework directory constant
+define('PHPUNIT_FRAMEWORK_DIR', $phpunit_framework_dir);
 
 // Verify test framework directory exists
 if (!is_dir(PHPUNIT_FRAMEWORK_DIR)) {
-    colored_message("Error: Test framework directory not found: " . PHPUNIT_FRAMEWORK_DIR, 'red');
-    colored_message("Please check your TEST_FRAMEWORK_DIR setting in .env.testing", 'yellow');
+    echo "Error: Test framework directory not found: " . PHPUNIT_FRAMEWORK_DIR . "\n";
+    echo "Searched in:\n";
+    echo "- " . PROJECT_DIR . " (self)\n";
+    echo "- " . PROJECT_DIR . "/vendor/glerner/phpunit-testing (Composer)\n";
+    echo "- " . $phpunit_framework_dir . " (submodule)\n";
     exit(1);
 }
 
-// Include the framework utility functions
-require_once PHPUNIT_FRAMEWORK_DIR . '/bin/framework-functions.php';
+// Now we can safely include framework functions
+$framework_functions = PHPUNIT_FRAMEWORK_DIR . '/bin/framework-functions.php';
+if (!file_exists($framework_functions)) {
+    echo "Error: Framework functions not found at: " . $framework_functions . "\n";
+    exit(1);
+}
+require_once $framework_functions;
 
 use function WP_PHPUnit_Framework\load_settings_file;
 # use function WP_PHPUnit_Framework\get_phpunit_database_settings;
@@ -57,6 +74,14 @@ use function WP_PHPUnit_Framework\is_lando_environment;
 
 // Set default timezone to avoid warnings
 date_default_timezone_set('UTC');
+
+// Now we can use get_setting() to override the framework dir if needed
+if (function_exists('get_setting')) {
+    $custom_framework_dir = get_setting('TEST_FRAMEWORK_DIR');
+    if ($custom_framework_dir && is_dir(TESTS_DIR . DIRECTORY_SEPARATOR . $custom_framework_dir)) {
+        define('PHPUNIT_FRAMEWORK_DIR', TESTS_DIR . DIRECTORY_SEPARATOR . $custom_framework_dir);
+    }
+}
 
 // Check if Composer autoloader exists
 if (!file_exists(PROJECT_DIR . '/vendor/autoload.php')) {
@@ -93,7 +118,7 @@ function colored_message(string $message, string $color = 'normal'): void {
  */
 function print_usage(): void {
     $script = basename(__FILE__);
-    
+
     colored_message("Usage:", 'blue');
     echo esc_cli("  php $script [options] [--file=<file>]\n\n");
 
@@ -118,10 +143,10 @@ function print_usage(): void {
     colored_message("Examples:", 'blue');
     echo esc_cli("  # Run all tests with coverage\n");
     echo esc_cli("  php $script --all --coverage\n\n");
-    
+
     echo esc_cli("  # Run a specific test file\n");
     echo esc_cli("  php $script --file=tests/Unit/ExampleTest.php\n\n");
-    
+
     echo esc_cli("  # Run with verbose output\n");
     echo esc_cli("  php $script --unit --verbose\n");
 }
@@ -217,16 +242,23 @@ echo esc_cli("  WordPress container root: " . $wp_root . "\n");
 echo esc_cli("  Plugin destination: " . $your_plugin_dest . "\n");
 echo esc_cli("  Test run path: " . $test_run_path . "\n");
 
-// Check if we're running in a Lando environment
-$is_lando = is_lando_environment();
+// Check if we're targeting Lando via SSH_COMMAND
+$ssh_command = get_setting('SSH_COMMAND', '');
+$targeting_lando = strpos($ssh_command, 'lando ssh') === 0;
+$is_lando = false;
 
-if ($is_lando) {
-    colored_message("Running in Lando environment", 'yellow');
+if ($targeting_lando) {
+    if (!is_lando_environment()) {
+        colored_message("Error: Lando is not running. Please start Lando and try again.", 'red');
+        exit(1);
+    }
+    $is_lando = true;
+    colored_message("Running with Lando (detected from SSH_COMMAND)", 'yellow');
 }
 
 // Step 0: Update framework files if needed
 colored_message("Updating WP PHPUnit Test Framework files...", 'blue');
-require_once __DIR__ . '/copy-wp-phpunit-test-framework-convenient-files.php';
+require_once __DIR__ . '/copy-sync-and-bootstrap-files.php';
 
 // Step 1: Sync plugin to WordPress
 colored_message("\nStep 1: Syncing project to WordPress...", 'green');
@@ -239,12 +271,12 @@ if (!is_dir($your_plugin_dest)) {
     if ($options['verbose']) {
         colored_message("Creating destination directory: $your_plugin_dest", 'blue');
     }
-    
+
     @mkdir($your_plugin_dest, 0755, true);
     if (!is_dir($your_plugin_dest)) {
         $error = error_get_last();
         $error_msg = $error ? $error['message'] : 'Unknown error';
-        
+
         colored_message("Error: Could not create destination directory: $your_plugin_dest", 'red');
         colored_message("Error details: $error_msg", 'yellow');
         colored_message("This might be a permissions issue. Try running:", 'yellow');
@@ -301,16 +333,16 @@ if ($options['verbose']) {
 if (!chdir($tests_dir)) {
     $error = error_get_last();
     $error_msg = $error ? $error['message'] : 'Unknown error';
-    
+
     colored_message("Error: Could not change to WordPress plugin Tests directory: $tests_dir", 'red');
     colored_message("Error details: $error_msg", 'yellow');
-    
+
     if (!is_dir($tests_dir)) {
         colored_message("The tests directory does not exist. Make sure sync-to-wp.php ran successfully.", 'yellow');
     } else {
         colored_message("Check directory permissions and try again.", 'yellow');
     }
-    
+
     exit(1);
 }
 
@@ -335,7 +367,7 @@ function build_phpunit_command($test_type, $options, $test_run_path) {
     // Determine the PHP command
     $php_command = $is_lando ? 'lando php' : 'php';
     $base_name = 'phpunit-' . $test_type;
-    $config_dir = $your_plugin_dest . '/tests/config/';
+    $config_dir = $your_plugin_dest . '/tests/bootstrap/';
 
     // Look for config file in the filesystem
     $config_file = '';
@@ -362,29 +394,26 @@ function build_phpunit_command($test_type, $options, $test_run_path) {
 
     // Build the path that PHPUnit will use
     $config_path = $is_lando
-        ? rtrim($wp_root, '/') . '/' . ltrim($folder_in_wordpress, '/') . '/' . $your_plugin_slug . '/tests/config/' . $config_filename
+        ? rtrim($wp_root, '/') . '/' . ltrim($folder_in_wordpress, '/') . '/' . $your_plugin_slug . '/tests/bootstrap/' . $config_filename
         : $config_file; // Use full path for local
 
 
     // Use the PHPUnit from the test framework's vendor directory
     $test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
     $phpunit_path = $is_lando
-        ? $wp_root . DIRECTORY_SEPARATOR . $folder_in_wordpress . DIRECTORY_SEPARATOR . $your_plugin_slug . 
-          DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . $test_framework_dir . 
+        ? $wp_root . DIRECTORY_SEPARATOR . $folder_in_wordpress . DIRECTORY_SEPARATOR . $your_plugin_slug .
+          DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . $test_framework_dir .
           DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'phpunit'
-        : __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 
+        : __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR .
           $test_framework_dir . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'phpunit';
 
-    if (!file_exists($phpunit_path)) {
-        throw new \RuntimeException(
-            "PHPUnit binary not found at: $phpunit_path\n" .
-            "Please follow the installation instructions in the test framework's documentation:\n" .
-            "tests" . DIRECTORY_SEPARATOR . "$test_framework_dir" . DIRECTORY_SEPARATOR . "docs" . 
-            DIRECTORY_SEPARATOR . "guides" . DIRECTORY_SEPARATOR . "installation-guide.md"
-        );
-    }
 
     $cmd = $php_command . ' ' . escapeshellarg($phpunit_path) . ' -c ' . escapeshellarg($config_path);
+
+    /* unknown option $cmd .= ' --display-deprecations';
+    $cmd .= ' --display-notices';
+    $cmd .= ' --display-warnings';
+    */
 
     // Add verbose option if requested
     if ($options['verbose']) {

@@ -40,6 +40,32 @@
    composer install
    ```
 
+## Architecture
+
+### Modern vs Traditional Approach
+
+**Traditional WordPress Style (Legacy)**
+- Manual file includes/requires
+- No namespacing
+- Global functions and classes
+- Mixing of concerns (HTML/PHP)
+- Harder to test and maintain
+
+**Modern Approach**
+- PSR-4 autoloading by Composer
+- Proper namespacing
+- Separation of concerns (MVC/MVVM)
+- Test-driven development
+- Better dependency management
+- Industry standard practices
+
+### Benefits of the Modern Approach
+- **Better Code Organization**: Clear separation between framework code and tests
+- **Improved IDE Support**: Better autocompletion and refactoring tools
+- **Easier Testing**: Isolated components are simpler to test
+- **Maintainability**: Clear boundaries between components
+- **Reusability**: Components can be more easily reused across projects
+
 ## Project Structure
 
 ```

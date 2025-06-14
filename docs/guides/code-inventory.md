@@ -90,6 +90,16 @@ This document provides an inventory of key functions, classes, and variables in 
    - PSR-4 autoloading via Composer
    - Namespaces match directory structure
    - Example: `GL_Reinvent\Model\Journey_Questions_Model` in `src/Model/Journey_Questions_Model.php`
+   - **For Projects Using This Framework**: 
+     - Map the namespace in your project's `autoload-dev.psr-4`: `"WP_PHPUnit_Framework\\": "tests/gl-phpunit-test-framework/src/"`
+     - Exclude the framework's vendor directory to prevent conflicts: 
+       ```json
+       "autoload-dev": {
+           "exclude-from-classmap": [
+               "**/tests/gl-phpunit-test-framework/vendor/"
+           ]
+       }
+       ```
 
 ### Traditional WordPress Style (Legacy)
 
@@ -107,12 +117,23 @@ This document provides an inventory of key functions, classes, and variables in 
    - No namespacing
    - Global functions and classes
 
-### Why Modern Approach?
-- Better code organization
-- Improved IDE support
-- Easier testing
-- Better dependency management
-- Industry standard practices
+### Test Framework Structure
+
+```
+framework-root/
+├── src/                    # Production code (autoload)
+│   ├── Unit/              # Base test cases for users
+│   ├── WP_Mock/           # WP_Mock test utilities
+│   └── ...                # Other framework components
+└── tests/                 # Tests for the framework itself (autoload-dev)
+    └── Framework/        # Framework's own test suite
+        ├── Unit/         # Unit tests for framework components
+        ├── WP_Mock/      # Tests for WP_Mock integration
+        └── Integration/  # Integration tests
+```
+
+- `autoload`: Classes that users extend/use in their tests
+- `autoload-dev`: Tests of the framework itself
 
 ## Test Class Naming Conventions
 

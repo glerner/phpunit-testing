@@ -22,30 +22,55 @@ use function WP_PHPUnit_Framework\get_phpunit_database_settings;
 use function WP_PHPUnit_Framework\get_setting;
 use function WP_PHPUnit_Framework\esc_cli;
 
+// Load settings
 $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
 
 // Define WordPress test environment constants if not already defined
 if (!defined('WP_TESTS_MULTISITE')) {
-	define('WP_TESTS_MULTISITE', false);
+    define('WP_TESTS_MULTISITE', false);
 }
 
 if (!defined('WP_TESTS_FORCE_KNOWN_BUGS')) {
-	define('WP_TESTS_FORCE_KNOWN_BUGS', false);
+    define('WP_TESTS_FORCE_KNOWN_BUGS', false);
 }
 
 // Attempt to locate WordPress test library
-echo "Locating WordPress test library\n";
+echo "\n=== Integration Test Setup ===\n";
+echo "Locating WordPress test library...\n";
 
-// Use get_setting function from bootstrap.php to get WP_TESTS_DIR
-$wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit");
+// Try to get WP_TESTS_DIR from environment or settings
+$wp_tests_dir = get_setting('WP_TESTS_DIR');
+
+// If not set, try common locations
+if (empty($wp_tests_dir) || !is_dir($wp_tests_dir)) {
+    $possible_paths = [
+        "$filesystem_wp_root/wp-content/plugins/wordpress-develop/tests/phpunit",
+        "/tmp/wordpress-tests-lib",
+        "/tmp/wordpress-tests-lib-phpunit",
+        dirname(dirname(FRAMEWORK_DIR)) . '/wordpress-develop/tests/phpunit',
+    ];
+    
+    foreach ($possible_paths as $path) {
+        if (is_dir($path)) {
+            $wp_tests_dir = $path;
+            break;
+        }
+    }
+}
 
 // Bail if we couldn't find the tests directory
-if (!$wp_tests_dir || !is_dir($wp_tests_dir)) {
-	echo "ERROR: WordPress test library not found in $wp_tests_dir.\n";
-	echo "Please set WP_TESTS_DIR in your .env.testing to the path of the WordPress test library.\n";
-	echo "That is where setup-plugin-tests.php installs it.\n";
-	exit(1);
+if (empty($wp_tests_dir) || !is_dir($wp_tests_dir)) {
+    echo "ERROR: WordPress test library not found. Tried:\n";
+    echo "- " . ($wp_tests_dir ?? '(not set)') . "\n";
+    foreach ($possible_paths ?? [] as $path) {
+        echo "- $path\n";
+    }
+    echo "\nPlease set WP_TESTS_DIR in your .env.testing to the path of the WordPress test library.\n";
+    echo "This is typically where setup-plugin-tests.php installs it.\n";
+    exit(1);
 }
+
+echo "Using WordPress test library from: $wp_tests_dir\n";
 
 // Load the WordPress test bootstrap file
 echo "Loading WordPress test include from: {$wp_tests_dir}/includes/bootstrap.php\n";
