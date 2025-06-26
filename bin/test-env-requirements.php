@@ -18,7 +18,8 @@ if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
     exit(1);
 }
 
-// Load framework functions
+// Load framework functions. Assumes framework-functions.php is in the same directory
+// as this script (e.g., both copied to PROJECT_DIR/bin/).
 require_once __DIR__ . '/framework-functions.php';
 
 /**
@@ -26,7 +27,7 @@ require_once __DIR__ . '/framework-functions.php';
  */
 function validate_environment(): bool {
     $is_valid = true;
-    $verbose = in_array('--verbose', $GLOBALS['argv'] ?? [], true);
+    $verbose = has_cli_flag('--verbose');
 
     // Define all settings and their validation rules
     $settings_validation = [
@@ -176,24 +177,36 @@ function validate_environment(): bool {
         ],
     ];
 
-    // Filter out settings that aren't in the .env file
-    $required_settings = array_filter($settings_validation, function($setting) use ($settings) {
-        return $setting['required'] || array_key_exists($setting, $settings);
-    }, ARRAY_FILTER_USE_KEY);
+    // Find the project root dynamically.
+    $project_dir = find_project_root(__DIR__);
+    if (null === $project_dir) {
+        echo esc_cli(COLOR_RED . 'Error: Could not find project root. Make sure a composer.json file exists in your plugin root.' . COLOR_RESET . "\n");
+        return false;
+    }
+    // Define for use in validation callbacks.
+    if (!defined('PROJECT_DIR')) {
+        define('PROJECT_DIR', $project_dir);
+    }
 
-    // Load project settings
-    $project_dir = dirname(__DIR__, 2);
-    $env_file = $project_dir . '/tests/.env.testing';
-
+    // Validate that the environment file exists.
+    $env_file = PROJECT_DIR . '/tests/.env.testing';
     if (!file_exists($env_file)) {
-        echo COLOR_RED . "ERROR: Required environment file not found: {$env_file}" . COLOR_RESET . "\n";
+        echo esc_cli(COLOR_RED . 'Error: Environment file not found at: ' . $env_file . COLOR_RESET . "\n");
+        echo esc_cli('Please copy or rename .env.sample.testing to .env.testing and configure it.' . "\n");
         return false;
     }
 
+    // Load settings from .env.testing. This populates the global $loaded_settings used by get_setting().
     $settings = load_settings_file($env_file);
+    $GLOBALS['loaded_settings'] = $settings;
+
+    // Filter settings_validation to only include those that are required or actually present in the loaded $settings
+    $active_settings_to_validate = array_filter($settings_validation, function($key) use ($settings, $settings_validation) {
+        return $settings_validation[$key]['required'] || array_key_exists($key, $settings);
+    }, ARRAY_FILTER_USE_KEY);
 
     // Check required settings
-    foreach ($required_settings as $setting => $config) {
+    foreach ($active_settings_to_validate as $setting => $config) {
         $value = $settings[$setting] ?? null;
         $is_set = $value !== null && $value !== '';
 

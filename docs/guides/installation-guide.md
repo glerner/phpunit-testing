@@ -202,8 +202,8 @@ From your plugin root folder:
 
 ```bash
 mkdir tests/bin
-cp tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php tests/bin/setup-plugin-tests.php
-cp tests/gl-phpunit-test-framework/config/* ./config/
+cp tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php bin/setup-plugin-tests.php
+cp tests/gl-phpunit-test-framework/tests/bootstrap/* ./tests/bootstrap/
 ```
 - Your most frequently used scripts will be in your tests/bin folder.
 - Your tests will be in folders of your tests/ folder.
@@ -273,6 +273,7 @@ After adding all the required packages, run `composer update` to ensure all depe
 cd tests
 composer update
 ```
+When asked "No composer.json in current directory, do you want to use the one at /home/yourname/sites/yourplugin? [Y,n]?" answer Y
 
 This command will update all dependencies to their latest versions according to the version constraints in your `composer.json` file.
 
@@ -618,7 +619,8 @@ Follow these steps for normal plugin development:
 composer sync:wp
 
 # Then run the setup script from your plugin development directory
-php bin/setup-plugin-tests.php
+# Should have been copied in "## Copy the Setup script" above
+php tests/bin/setup-plugin-tests.php
 ```
 
 The setup script will:

@@ -23,19 +23,20 @@ $files_to_copy = [
     'tests/bootstrap/bootstrap-wp-mock.php' => 'tests/bootstrap/bootstrap-wp-mock.php',
     'tests/bootstrap/bootstrap-integration.php' => 'tests/bootstrap/bootstrap-integration.php',
     'tests/bootstrap/bootstrap-framework.php' => 'tests/bootstrap/bootstrap-framework.php',
-    'tests/bootstrap/TestListener.php' => 'tests/bootstrap/TestListener.php',
 
     // PHPUnit config files go to tests/bootstrap/
-    'tests/bootstrap/phpunit-unit.xml.dist' => 'tests/bootstrap/phpunit-unit.xml.dist',
-    'tests/bootstrap/phpunit-wp-mock.xml.dist' => 'tests/bootstrap/phpunit-wp-mock.xml.dist',
-    'tests/bootstrap/phpunit-integration.xml.dist' => 'tests/bootstrap/phpunit-integration.xml.dist',
-    'tests/bootstrap/phpunit-multisite.xml.dist' => 'tests/bootstrap/phpunit-multisite.xml.dist',
-    'tests/bootstrap/phpunit-framework-tests.xml.dist' => 'tests/bootstrap/phpunit-framework-tests.xml.dist',
+    'tests/bootstrap/phpunit-unit.xml' => 'tests/bootstrap/phpunit-unit.xml',
+    'tests/bootstrap/phpunit-wp-mock.xml' => 'tests/bootstrap/phpunit-wp-mock.xml',
+    'tests/bootstrap/phpunit-integration.xml' => 'tests/bootstrap/phpunit-integration.xml',
+    'tests/bootstrap/phpunit-multisite.xml' => 'tests/bootstrap/phpunit-multisite.xml',
+    'tests/bootstrap/phpunit-framework-tests.xml' => 'tests/bootstrap/phpunit-framework-tests.xml',
 
     // Bin files
-    'bin/sync-and-test.php' => 'bin/sync-and-test.php.dist',
-    'bin/sync-to-wp.php' => 'bin/sync-to-wp.php.dist',
-    'bin/copy-sync-and-bootstrap-files.php' => 'bin/copy-sync-and-bootstrap-files.php.copy',
+    'bin/sync-and-test.php' => 'bin/sync-and-test.php',
+    'bin/sync-to-wp.php' => 'bin/sync-to-wp.php',
+        'bin/copy-sync-and-bootstrap-files.php' => 'bin/copy-sync-and-bootstrap-files.php',
+    'bin/framework-functions.php' => 'bin/framework-functions.php',
+    'bin/test-env-requirements.php' => 'bin/test-env-requirements.php',
 
     // Other framework files
     '.env.sample.testing' => 'tests/.env.sample.testing',
@@ -57,6 +58,9 @@ foreach ($directories as $dir) {
 $copied = 0;
 $skipped = 0;
 
+// Clear the file status cache to ensure we get the latest file modification times.
+clearstatcache();
+
 foreach ($files_to_copy as $source => $dest) {
     $source_path = $framework_dir . '/' . $source;
     $dest_path = $target_dir . '/' . $dest;
@@ -66,7 +70,8 @@ foreach ($files_to_copy as $source => $dest) {
     if (file_exists($source_path)) {
         if (!file_exists($dest_path) || filemtime($source_path) > filemtime($dest_path)) {
             if (copy($source_path, $dest_path)) {
-                echo "  Updated: $dest_path\n";
+                echo "From $source_path\n";
+                echo "  to $dest_path\n";
                 $copied++;
             } else {
                 echo "  Failed to copy: $dest_path\n";
@@ -85,13 +90,5 @@ echo "Done. Updated $copied files, $skipped files were already up to date.\n";
 $env_file = $target_dir . '/tests/.env.testing';
 if (file_exists($env_file)) {
     chmod($env_file, 0644);
-    echo "\nNote: $env_file permissions set to 0644 for security.\n";
+    echo "Note: $env_file permissions set to 0644 for security.\n";
 }
-
-echo "\nTo run tests, use (from plugin root):\n";
-echo "  tests/vendor/bin/phpunit -c tests/bootstrap/phpunit-unit.xml.dist\n";
-echo "  tests/vendor/bin/phpunit -c tests/bootstrap/phpunit-wp-mock.xml.dist\n";
-echo "  tests/vendor/bin/phpunit -c tests/bootstrap/phpunit-integration.xml.dist\n";
-
-echo "\nFor verbose output, add -v or -vvv to the command. Example:\n";
-echo "  tests/vendor/bin/phpunit -vvv -c tests/bootstrap/phpunit-unit.xml.dist\n";

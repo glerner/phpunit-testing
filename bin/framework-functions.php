@@ -18,10 +18,12 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework;
 
-// Exit if accessed directly, should be run command line
-if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
-    exit;
+// Guard against being loaded more than once from different paths.
+if (defined('WP_PHPUNIT_FRAMEWORK_FUNCTIONS_LOADED')) {
+    echo "\n\nWP_PHPUNIT_FRAMEWORK_FUNCTIONS_LOADED already defined\n\n";
+	return;
 }
+const WP_PHPUNIT_FRAMEWORK_FUNCTIONS_LOADED = true;
 
 // Define color constants for terminal output
 const COLOR_RESET = "\033[0m";
@@ -34,13 +36,73 @@ const COLOR_CYAN = "\033[36m";
 const COLOR_WHITE = "\033[37m";
 const COLOR_BOLD = "\033[1m";
 
+// If the file has already been loaded, do not load it again.
+if (function_exists('WP_PHPUnit_Framework\colored_message')) {
+    try {
+        $reflection = new \ReflectionFunction('WP_PHPUnit_Framework\colored_message');
+        $first_declared_in = $reflection->getFileName();
+    } catch (\ReflectionException $e) {
+        $first_declared_in = 'unknown location';
+    }
+
+    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+    $second_request_from = $backtrace[1]['file'] ?? 'unknown file';
+
+    $log_message = sprintf(
+        "NOTICE: In '%s', framework-functions.php already loaded from '%s'. Second attempt to load from '%s'. Ignoring duplicate.",
+        __DIR__,
+        $first_declared_in,
+        $second_request_from
+    );
+
+    // Log to a predictable file in the temp directory.
+    $log_file = sys_get_temp_dir() . '/phpunit-testing-framework-load.log';
+    echo "temp log $log_file\n";
+    error_log($log_message . "\n", 3, $log_file);
+
+    return; // Silently exit to prevent fatal error.
+}
+
+// Exit if accessed directly, should be run command line
+if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
+    exit;
+}
+
+/**
+ * Print a colored message to the console
+ * Does esc_cli the text
+ *
+ * @param string $message The message to print
+ * @param string $color   The color to use (green, yellow, red, blue, purple, cyan, light_gray, white, normal)
+ * @return void
+ */
+function colored_message(string $message, string $color = 'normal'): void {
+	$colors = [
+		'green'     => COLOR_GREEN,
+		'yellow'    => COLOR_YELLOW,
+		'red'       => COLOR_RED,
+		'blue'      => COLOR_BLUE,
+		'purple'    => COLOR_MAGENTA,
+        'magenta'    => COLOR_MAGENTA,
+		'cyan'      => COLOR_CYAN,
+		'light_gray' => COLOR_WHITE,
+		'white'     => COLOR_WHITE,
+		'normal'    => COLOR_RESET,
+	];
+	$color = strtolower($color);
+		$start_color = isset($colors[$color]) ? $colors[$color] : $colors['normal'];
+	$end_color   = COLOR_RESET;
+	echo esc_cli($start_color . $message . $end_color . "\n");
+}
+
+
 // Global exception handler to catch and display any uncaught exceptions
 set_exception_handler(
     function ( \Throwable $e ): void {
-		echo esc_cli("\n" . COLOR_RED . 'UNCAUGHT EXCEPTION: ' . get_class($e) . COLOR_RESET . "\n");
-		echo esc_cli(COLOR_RED . 'Message: ' . $e->getMessage() . COLOR_RESET . "\n");
-		echo esc_cli(COLOR_RED . 'File: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')' . COLOR_RESET . "\n");
-		echo esc_cli(COLOR_RED . 'Stack trace:' . COLOR_RESET . "\n");
+		colored_message('UNCAUGHT EXCEPTION: ' . get_class($e), 'red');
+		colored_message('Message: ' . $e->getMessage(), 'red');
+		colored_message('File: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')', 'red');
+		colored_message('Stack trace:', 'red');
 		echo esc_cli($e->getTraceAsString() . "\n");
 		exit(1);
 	}
@@ -146,6 +208,28 @@ function make_path(...$segments): string {
 	return $path;
 }
 
+/**
+ * Finds the project root directory by searching upwards from a starting directory for a marker file.
+ *
+ * @param string $start_dir The directory to start searching from.
+ * @param string $marker The marker file to look for (e.g., 'composer.json', '.git').
+ * @return string|null The path to the project root, or null if not found.
+ */
+function find_project_root(string $start_dir, string $marker = 'composer.json'): ?string {
+    $dir = $start_dir;
+    while ($dir !== '/' && $dir !== '.' && !empty($dir)) {
+        if (file_exists($dir . DIRECTORY_SEPARATOR . $marker)) {
+            return $dir;
+        }
+        $parent = dirname($dir);
+        if ($parent === $dir) { // Reached fs root and not found.
+            return null;
+        }
+        $dir = $parent;
+    }
+    return null;
+}
+
 
 /**
  * Retrieves WordPress database connection settings from multiple sources in a specific priority order.
@@ -182,37 +266,53 @@ function get_database_settings(
 
     // 1. Load from wp-config.php (lowest priority)
     if (file_exists($wp_config_path)) {
-        echo esc_cli("Reading database settings from wp-config.php...\n");
+        colored_message("Reading database settings from $wp_config_path");
 
-        // Include the wp-config.php file directly
-        try {
-            // Suppress warnings/notices that might come from wp-config.php
-            @include_once $wp_config_path;
+        $temp_config_path = tempnam(sys_get_temp_dir(), 'wp_config_');
+        $config_content = file_get_contents($wp_config_path);
+        if ($config_content === false) {
+            throw new \Exception("Could not read wp-config.php at $wp_config_path");
+        }
 
-            // Get the database settings from the constants
-            if (defined('DB_NAME') && DB_NAME) {
-                $db_settings['db_name'] = DB_NAME;
+        // Safely extract only DB definitions and table_prefix to avoid loading all of WordPress
+        $pattern = "/(define\s*\(\s*['\"](DB_NAME|DB_USER|DB_PASSWORD|DB_HOST)['\"].*?;|\$table_prefix\s*=\s*['\"].*?['\"];)/m";
+        preg_match_all($pattern, $config_content, $matches);
+
+        if (!empty($matches[0])) {
+            $temp_content = "<?php\n" . implode("\n", $matches[0]);
+            file_put_contents($temp_config_path, $temp_content);
+
+            try {
+                // Include the temporary, sanitized config file
+                @include $temp_config_path;
+
+                // Get the database settings from the constants
+                if (defined('DB_NAME')) {
+                    $db_settings['db_name'] = DB_NAME;
+                }
+                if (defined('DB_USER')) {
+                    $db_settings['db_user'] = DB_USER;
+                }
+                if (defined('DB_PASSWORD')) {
+                    $db_settings['db_pass'] = DB_PASSWORD;
+                }
+                if (defined('DB_HOST')) {
+                    $db_settings['db_host'] = DB_HOST;
+                }
+
+                // Get the table prefix from the global variable
+                if (isset($table_prefix)) {
+                    $db_settings['table_prefix'] = $table_prefix;
+                }
+
+            } catch (\Exception $e) {
+                colored_message("Warning: Error including temporary config file: {$e->getMessage()}", 'yellow');
+            } finally {
+                // Clean up the temporary file
+                unlink($temp_config_path);
             }
-
-            if (defined('DB_USER') && DB_USER) {
-                $db_settings['db_user'] = DB_USER;
-            }
-
-            if (defined('DB_PASSWORD')) { // Password can be empty
-                $db_settings['db_pass'] = DB_PASSWORD;
-            }
-
-            if (defined('DB_HOST') && DB_HOST) {
-                $db_settings['db_host'] = DB_HOST;
-            }
-
-            // Get the table prefix from the global variable
-            global $table_prefix;
-            if (isset($table_prefix)) {
-                $db_settings['table_prefix'] = $table_prefix;
-            }
-        } catch (\Exception $e) {
-            echo esc_cli(COLOR_YELLOW . "Warning: Error including $wp_config_path: {$e->getMessage()}" . COLOR_RESET . "\n");
+        } else {
+             colored_message("Warning: Could not find DB settings in $wp_config_path . Check wp-config.php format.", 'yellow');
         }
     }
 
@@ -254,11 +354,12 @@ function get_database_settings(
     if ($env_var_db_name !== false && $env_var_db_name) {
 		$db_settings['db_name'] = $env_var_db_name;
     }
+
     // Note: table_prefix is only read from wp-config.php and not from environment variables
 
     // 4. Load from Lando configuration (highest priority)
     if (!empty($lando_info)) {
-        echo "Getting Lando internal configuration...\n";
+        colored_message('Getting Lando internal configuration...');
 
         // Find the database service
         $db_service = null;
@@ -287,11 +388,11 @@ function get_database_settings(
                 $db_settings['db_name'] = $creds['database'];
             }
 
-            echo esc_cli("Found Lando database service: {$db_settings['db_host']}\n");
+            colored_message("Found Lando database service: {$db_settings['db_host']}");
             // Note: table_prefix is only read from wp-config.php and not from Lando configuration
         } else {
-            echo esc_cli(COLOR_YELLOW . 'Warning: No MySQL service found in Lando configuration.' . COLOR_RESET . "\n");
-            echo esc_cli("This indicates a potential issue with your Lando setup.\n");
+            colored_message('Warning: No MySQL service found in Lando configuration.', 'yellow');
+            colored_message('This indicates a potential issue with your Lando setup.');
         }
     }
 
@@ -305,7 +406,7 @@ function get_database_settings(
 
     if (!empty($missing_settings)) {
         $missing_str = implode(', ', $missing_settings);
-        throw new \Exception(esc_cli("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php."));
+        throw new \Exception("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php.");
     }
 
     // Display the final settings
@@ -318,6 +419,39 @@ function get_database_settings(
     return $db_settings;
 }
 
+/**
+ * Displays instructions for running tests via Composer and the sync script.
+ *
+ * @since 1.0.0
+ *
+ * @param bool $is_lando Whether this is a Lando environment.
+ */
+function display_composer_test_instructions( bool $is_lando, string $plugin_dir ): void {
+	$lando_prefix = $is_lando ? 'lando ' : '';
+
+	// In a Lando environment, the user runs `lando` commands from the project root on their host machine.
+	// The $plugin_dir should be the path on the filesystem.
+	$cd_command = "cd " . escapeshellarg( $plugin_dir );
+
+	colored_message( "\nTo run the tests, execute these commands from your terminal:", 'yellow' );
+	colored_message( "1. Navigate to your plugin directory:", 'cyan' );
+	colored_message( "   " . $cd_command, 'light_gray' );
+	colored_message( "2. Run the desired test suite:", 'cyan' );
+	colored_message( "   " . $lando_prefix . "composer test:integration  # For integration tests with DB", 'light_gray' );
+	colored_message( "   " . $lando_prefix . "composer test:unit        # For unit tests (no DB)", 'light_gray' );
+	colored_message( "   " . $lando_prefix . "composer test:wp-mock     # For tests using WP_Mock", 'light_gray' );
+	colored_message( "   " . $lando_prefix . "composer test             # To run all test types\n", 'light_gray' );
+
+	colored_message( 'Alternate:', 'yellow' );
+    colored_message( "1. Navigate to your plugin directory:", 'cyan' );
+    $cd_command = "cd " . escapeshellarg( dirname(__DIR__ ));
+	colored_message( "   $cd_command", 'light_gray' );
+	$sync_script_path = 'bin/sync-and-test.php';
+	colored_message( "   php $sync_script_path --integration # For integration tests", 'light_gray' );
+	colored_message( "   php $sync_script_path --unit        # For unit tests", 'light_gray' );
+	colored_message( "   php $sync_script_path --wp-mock     # For WP-Mock tests", 'light_gray' );
+	colored_message( "   php $sync_script_path --all         # To run all test types\n", 'light_gray' );
+}
 
 /**
  * Format SSH command properly based on the SSH_COMMAND setting
@@ -345,8 +479,61 @@ function format_ssh_command( string $ssh_command, string $command ): string {
         // echo esc_cli("Debug: Using regular SSH format\n");
     }
 
-    echo esc_cli("Debug: Final SSH command: $result\n");
+    colored_message("Debug: Final SSH command: $result", 'blue');
     return $result;
+}
+
+/**
+ * Logs a message to the console and a specified log file.
+ *
+ * This function displays a colored and icon-prefixed message to the console and
+ * writes a timestamped, uncolored version to the log file defined by the
+ * 'TEST_ERROR_LOG' environment setting.
+ *
+ * @param string $message The message to log.
+ * @param string $type    The type of message (info, success, warning, error, debug).
+ *                        Determines the icon and color of the console output.
+ * @param bool   $display_on_console Whether to display the message on the console. Default is true.
+ * @return void
+ */
+function log_message(string $message, string $type = 'info', bool $display_on_console = true): void {
+    $type = strtolower($type);
+    $icons = [
+        'info'    => 'ℹ️ ',
+        'success' => '✅ ',
+        'warning' => '⚠️ ',
+        'error'   => '❌ ',
+        'debug'   => '🐞 ',
+    ];
+    $colors = [
+        'info'    => 'cyan',
+        'success' => 'green',
+        'warning' => 'yellow',
+        'error'   => 'red',
+        'debug'   => 'purple',
+    ];
+
+    $icon = $icons[$type] ?? 'ℹ️ ';
+    $color = $colors[$type] ?? 'normal';
+
+    // Console output
+    if ($display_on_console) {
+        colored_message($icon . $message, $color);
+    }
+
+    // File logging
+    $log_file = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
+    if ($log_file) {
+        $timestamp = date('Y-m-d H:i:s');
+        $log_entry = sprintf(
+            "[%s] [%s]: %s\n",
+            $timestamp,
+            strtoupper($type),
+            $message
+        );
+        // The '3' means append to the file specified in the third argument.
+        error_log($log_entry, 3, $log_file);
+    }
 }
 
 
@@ -464,12 +651,50 @@ function format_mysql_parameters_and_query( string $host, string $user, string $
 	$formatted_command = "$connection_params -e '$escaped_sql'";
 
 	// Debug: Show the transformation of the SQL command
-	// echo "\nDebug: format_mysql_command details:\n";
+	// echo "\nDebug: mysql parameters and query details:\n";
 	// echo "Original SQL:\n$sql\n";
 	// echo "Escaped SQL:\n$escaped_sql\n";
 	// echo "Full MySQL command:\n$formatted_command\n";
 
 	return $formatted_command;
+}
+
+/**
+ * Future likely enhancement. Needs to be designed to cover all environments using, and all parameters it might have to handle
+ *
+ * Executes a given command in the target environment (local or via SSH).
+ *
+ * @param string $ssh_command The SSH command string from settings (e.g., 'none', 'ssh', 'lando ssh appserver --').
+ * @param string $command_to_run The actual command to execute (e.g., 'which mysql').
+ * @return array An array containing 'output' (array of lines) and 'status' (int exit code).
+ */
+function execute_command_in_target_env(string $ssh_command, string $command_to_run): array {
+    $full_command_string = '';
+    $output_lines = [];
+    $exit_status = -1;
+
+    // The command_to_run is simple (e.g., 'which mysql'), so direct use is generally safe here.
+    // For more complex commands with user input, more robust escaping would be needed.
+
+    if (empty($ssh_command) || $ssh_command === 'none' || $ssh_command === 'ssh') {
+        // Execute directly on the current host or if already in an SSH session.
+        // 'ssh' implies we are already in the target environment.
+        $full_command_string = $command_to_run;
+    } else {
+        // Prepend SSH command. We need to ensure the $command_to_run is executed by the remote shell.
+        // $ssh_command might be 'lando ssh appserver --' or 'ssh user@host'.
+        // The command needs to be quoted for the remote shell.
+        // Using bash -c ensures that the command is interpreted by a shell, which handles 'which' correctly.
+        $escaped_command_for_bash_c = escapeshellarg($command_to_run);
+        $full_command_string = $ssh_command . " bash -c " . $escaped_command_for_bash_c;
+    }
+
+    // For debugging, one might uncomment this:
+    // echo "Executing in target env: " . $full_command_string . "\n";
+
+    exec($full_command_string . ' 2>&1', $output_lines, $exit_status); // Capture stderr too
+
+    return ['output' => $output_lines, 'status' => $exit_status];
 }
 
 /**
@@ -518,6 +743,7 @@ function load_settings_file( string $env_file ): array {
 		}
 	} else {
 		echo "Warning: Environment file not found at: $env_file\n";
+        echo "Called from " . __FILE__ . "\n";
 	}
 
 	// For critical paths, try to detect from current directory if not set
@@ -610,38 +836,37 @@ function is_lando_environment(): bool {
 function get_lando_info(): array {
     // First check if we're in a Lando environment
     if (!is_lando_environment()) {
-        echo "No running Lando environment detected. Is Lando running?\n";
-        echo "Run 'lando start' to start Lando, or see docs/guides/rebuilding-after-system-updates.md if you're having issues after system updates.\n";
+        colored_message( 'No running Lando environment detected. Is Lando running?', 'red' );
+        colored_message( "Run 'lando start' to start Lando, or see docs/guides/rebuilding-after-system-updates.md if you're having issues after system updates.", 'yellow' );
         return array();
     }
 
-    echo "Found running Lando containers.\n";
+    colored_message( 'Found running Lando containers.', 'green' );
 
     // Now get the detailed configuration with lando info
     $lando_info_json = shell_exec('lando info --format=json 2>/dev/null');
     if (empty($lando_info_json)) {
-        echo "Lando is running but could not get configuration details.\n";
+        colored_message( 'Lando is running but could not get configuration details.', 'red' );
         return array();
     }
 
     // Debug: Show raw lando info output for troubleshooting
-    // echo "Debug: Raw lando info output (first 500 chars): " . substr($lando_info_json, 0, 500) . "...\n";
+    // colored_message("Debug: Raw lando info output (first 500 chars): " . substr($lando_info_json, 0, 500) . "...\n");
 
     // Parse JSON output from lando info
     $lando_info = json_decode($lando_info_json, true);
     if (json_last_error() !== JSON_ERROR_NONE || empty($lando_info)) {
-        echo "Error parsing Lando configuration: " . json_last_error_msg() . ". Skipping Lando settings.\n";
+        colored_message( 'Error parsing Lando configuration: ' . json_last_error_msg() . '. Skipping Lando settings.', 'red' );
         return array();
     }
 
-    echo "Found Lando configuration.\n";
+    colored_message( 'Found Lando configuration.', 'green' );
     return $lando_info;
 }
 
 
 /**
- * Parse Lando info JSON
- *
+ * Parse Lando info JSON *
  * @return array|null Lando configuration or null if not in Lando environment
  */
 function parse_lando_info(): ?array {
@@ -653,7 +878,7 @@ function parse_lando_info(): ?array {
 
     $lando_data = json_decode($lando_info, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        echo 'Warning: Failed to parse LANDO_INFO JSON: ' . json_last_error_msg() . "\n";
+        colored_message( 'Warning: Failed to parse LANDO_INFO JSON: ' . json_last_error_msg(), 'yellow' );
         return null;
     }
 
@@ -674,13 +899,13 @@ function parse_lando_info(): ?array {
  * @throws \Exception If the command type is invalid.
  */
 function format_mysql_execution( string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null ): string {
-    $command_type = 'ssh';
-
     // Determine the command type based on the SSH command
     if (strpos($ssh_command, 'lando ssh') === 0) {
         $command_type = 'lando_direct';
-    } elseif (!$ssh_command || $ssh_command === 'none') {
+    } elseif (empty($ssh_command) || $ssh_command === 'none') { // Using empty() for clarity
         $command_type = 'direct';
+    } else { // Handles all other cases, making 'ssh' explicit
+        $command_type = 'ssh';
     }
 
     // Format the MySQL parameters with the appropriate command type
@@ -764,4 +989,64 @@ function get_wp_config_value( string $search_value, string $wp_config_path ): ?s
  */
 function esc_cli( string $text ): string {
     return $text;
+}
+
+
+/**
+ * Checks if a flag or one of its aliases exists in the command-line arguments.
+ *
+ * This function is case-sensitive. It checks for the presence of simple flags
+ * like `--verbose` or `-h`.
+ *
+ * @param string|array $flags       A single flag (e.g., '--help') or an array of aliases (e.g., ['--help', '-h']).
+ * @param array|null   $source_argv Optional source array of arguments. Defaults to the global $argv.
+ * @return bool True if the flag or any of its aliases are found, false otherwise.
+ */
+function has_cli_flag(string|array $flags, ?array $source_argv = null): bool {
+    $argv = $source_argv ?? $GLOBALS['argv'] ?? [];
+    $flags = (array) $flags;
+
+    foreach ($argv as $arg) {
+        if (in_array($arg, $flags, true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Gets the value of a command-line argument.
+ *
+ * This function can retrieve values from arguments in both `--option=value` and
+ * `--option value` formats.
+ *
+ * @param string|array $flags       A single flag (e.g., '--file') or an array of aliases (e.g., ['--file', '-f']).
+ * @param array|null   $source_argv Optional source array of arguments. Defaults to the global $argv.
+ * @return string|null The value of the argument, or null if the flag is not found.
+ */
+function get_cli_value(string|array $flags, ?array $source_argv = null): ?string {
+    $argv = $source_argv ?? $GLOBALS['argv'] ?? [];
+    $flags = (array) $flags;
+
+    foreach ($argv as $i => $arg) {
+        // Check for --option=value format
+        foreach ($flags as $flag) {
+            if (strpos($arg, $flag . '=') === 0) {
+                return substr($arg, strlen($flag) + 1);
+            }
+        }
+
+        // Check for --option value format
+        if (in_array($arg, $flags, true)) {
+            // Ensure the next element exists and is not another flag
+            if (isset($argv[$i + 1]) && strpos($argv[$i + 1], '-') !== 0) {
+                return $argv[$i + 1];
+            }
+            // The flag was present but had no value
+            return '';
+        }
+    }
+
+    return null;
 }

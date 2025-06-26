@@ -1,5 +1,23 @@
 # Programming with AI Assistance
 
+## Golden Rules for AI Collaboration
+
+1.  **The Runtime Environment is King:** The project uses a "copy-then-run" workflow. Assume dependencies are local (`__DIR__`) unless a script explicitly defines a source path. Do not try to reach outside the current directory with `../`.
+2.  **Consistency Over Local Correctness:** Never refactor a single file in a way that makes it inconsistent with the rest of the project (e.g., changing a namespace). Propose project-wide refactors as a plan, but do not implement them without explicit, global approval.
+3.  **Trust the Scripts:** The logic for file paths and environment setup is handled by scripts like `sync-and-test.php` and variables like `TEST_FRAMEWORK_DIR`. Do not invent new path logic.
+
+## Common Anti-Patterns to Avoid
+
+-   **Incorrect Pathing:**
+    -   **Anti-Pattern:** `require_once __DIR__ . '/../../some/path/file.php';`
+    -   **Reason:** This bypasses the project's copy-based workflow and makes incorrect assumptions about the file system.
+    -   **Correct Pattern:** `require_once __DIR__ . '/file.php';` (and ensure the sync script copies the file).
+
+-   **Isolated Refactoring:**
+    -   **Anti-Pattern:** Changing `namespace WP_PHPUnit_Framework;` to `namespace WP_PHPUnit_Framework\Bin;` in a single file.
+    -   **Reason:** This creates an immediate inconsistency that breaks the build.
+    -   **Correct Pattern:** Propose a project-wide refactoring plan to be reviewed and applied globally.
+
 ## Development Workflow and Standards
 
 ### Development Process
@@ -28,6 +46,7 @@
   - Git submodule reference to the testing framework
   - Do not modify directly
   - Changes should be made in the source directory and synced
+  - Most-used files are copied to bin/ or tests/bootstrap/ by bin/copy-sync-and-bootstrap-files.php
 
 ### Workflow Guidelines
 1. Make changes in the appropriate source directory
@@ -48,6 +67,11 @@
   - Documentation should be up to date
 
 ## WordPress + PSR Development Standards
+
+### PHP File Structure
+
+- **`phpcs` Directives**: File-level `phpcs` directives (comments that disable or modify specific linting rules for the entire file) should be placed at the top of the file. They must come after the opening `<?php` tag but before the `namespace` declaration.
+- **`declare` and `namespace`**: The `declare` statement (e.g., `declare(strict_types=1);`) and the `namespace` declaration must be the first executable code statements in a file, only preceded by comments or the opening tag.
 
 ### Directory Structure
 ```

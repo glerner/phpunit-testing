@@ -17,6 +17,8 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use WP_PHPUnit_Framework\Event\Listener\GlTestRunnerExecutionStartedListener;
+use WP_PHPUnit_Framework\Event\Listener\GlTestSuiteStartedListener;
 use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
 use function WP_PHPUnit_Framework\get_setting;
@@ -72,9 +74,21 @@ if (empty($wp_tests_dir) || !is_dir($wp_tests_dir)) {
 
 echo "Using WordPress test library from: $wp_tests_dir\n";
 
+// The main bootstrap.php file handles autoloading, so it is not needed here.
+
 // Load the WordPress test bootstrap file
 echo "Loading WordPress test include from: {$wp_tests_dir}/includes/bootstrap.php\n";
 require_once $wp_tests_dir . '/includes/bootstrap.php';
+
+// Register the event subscribers for PHPUnit 11+
+if (class_exists('PHPUnit\Event\Facade')) {
+    echo "- Registering event subscribers with PHPUnit\n";
+    $subscriber = new GlTestRunnerExecutionStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
+
+    $subscriber = new GlTestSuiteStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
+}
 
 // Initialize Mockery for integration tests
 echo "Setting up Mockery for integration tests\n";

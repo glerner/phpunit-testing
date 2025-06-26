@@ -23,46 +23,45 @@ declare(strict_types=1);
 namespace WP_PHPUnit_Framework;
 
 use function WP_PHPUnit_Framework\load_settings_file;
+use function WP_PHPUnit_Framework\display_composer_test_instructions;
+use function WP_PHPUnit_Framework\esc_cli;
+use function WP_PHPUnit_Framework\find_project_root;
+use function WP_PHPUnit_Framework\format_mysql_execution;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
 use function WP_PHPUnit_Framework\get_setting;
-use function WP_PHPUnit_Framework\esc_cli;
+use function WP_PHPUnit_Framework\is_lando_environment;
 
-/* Define script constants as namespace constants
- * SCRIPT_DIR should be your-plugin/tests/bin
- * PROJECT_DIR should be your-plugin
-*/
+// Include the framework utility functions early so we can use its functions
+require_once __DIR__ . '/framework-functions.php';
+
+// Define SCRIPT_DIR. We use this to find the project root.
 define('SCRIPT_DIR', __DIR__);
-define('PROJECT_DIR', dirname(SCRIPT_DIR,2));
 
-// Source directories (from project root)
-$framework_bin_source    = PROJECT_DIR . '/tests/gl-phpunit-test-framework/bin';
-$framework_config_source = PROJECT_DIR . '/tests/gl-phpunit-test-framework/config';
-
-// Destination directories (from project root)
-$dest_bin_dir    = PROJECT_DIR . '/tests/bin';
-$dest_config_dir = PROJECT_DIR . '/tests/config';
-
-// Ensure destination directories exist
-if (!is_dir($dest_bin_dir)) {
-    mkdir($dest_bin_dir, 0755, true);
+// Find the project root dynamically by looking for README.md, both the project containing WP_PHPUnit_Framework, and WP_PHPUnit_Framework itself, have one.
+$default_framework_path = find_project_root(SCRIPT_DIR, 'README.md');
+$project_dir = find_project_root(dirname($default_framework_path), 'README.md');
+if (null === $project_dir) {
+    echo esc_cli(COLOR_RED . 'Error: Could not find project root. Make sure a composer.json file exists in your plugin root.' . COLOR_RESET . "\n");
+    exit(1);
 }
-if (!is_dir($dest_config_dir)) {
-    mkdir($dest_config_dir, 0755, true);
-}
+define('PROJECT_DIR', $project_dir);
 
-// Copy bin scripts (excluding setup-plugin-tests.php itself)
-foreach (['framework-functions.php', 'phpcbf.sh', 'sync-and-test.php', 'sync-to-wp.php'] as $file) {
-    copy("$framework_bin_source/$file", "$dest_bin_dir/$file");
+// Validate that the script is in the correct directory structure
+if (basename(SCRIPT_DIR) !== 'bin') {
+    echo esc_cli(COLOR_RED . 'Error: This script must be run from the ' . PROJECT_DIR . '/bin` directory of your plugin.' . COLOR_RESET . "\n");
+    echo esc_cli('Expected path: ' . PROJECT_DIR . '/bin' . "\n");
+    exit(1);
 }
 
-// Optionally copy config files
-foreach (glob("$framework_config_source/*.xml.dist") as $config_file) {
-    $dest = $dest_config_dir . '/' . basename($config_file);
-    copy($config_file, $dest);
-}
+// Validate that the environment file exists
+$env_file_path = PROJECT_DIR . '/tests/.env.testing';
+echo "Project Dir: ". PROJECT_DIR . " \nScript Dir: " . SCRIPT_DIR . "\n";
 
-// Include the framework utility functions
-require_once SCRIPT_DIR . '/framework-functions.php';
+if (!file_exists($env_file_path)) {
+    echo esc_cli(COLOR_RED . 'Error: Environment file not found at: ' . $env_file_path . COLOR_RESET . "\n");
+    echo esc_cli('Please copy or rename .env.sample.testing to .env.testing and configure it.' . "\n");
+    exit(1);
+}
 
 // Exit if accessed directly, should be run command line
 if (!defined('ABSPATH') && php_sapi_name() !== 'cli') {
@@ -75,34 +74,172 @@ ini_set('display_errors', '1');
 
 // Load settings from .env.testing
 $env_file_path = PROJECT_DIR . '/tests/.env.testing';
-$loaded_settings = load_settings_file($env_file_path);
+$GLOBALS['loaded_settings'] = load_settings_file($env_file_path); // Ensure settings are globally available for get_setting()
+
+// Validate that PLUGIN_FOLDER is present.
+$required_settings = ['PLUGIN_FOLDER', 'TEST_FRAMEWORK_DIR'];
+$missing_settings = [];
+foreach ($required_settings as $setting) {
+    if (empty(get_setting($setting))) {
+        $missing_settings[] = $setting;
+    }
+}
+
+if (!empty($missing_settings)) {
+    echo esc_cli(COLOR_RED . 'Error: The following required settings are missing or empty in ' . $env_file_path . ':' . COLOR_RESET . "\n");
+    foreach ($missing_settings as $setting) {
+        echo esc_cli(COLOR_RED . '- ' . $setting . COLOR_RESET . "\n");
+    }
+    echo esc_cli('Please define them and try again.' . "\n");
+    exit(1);
+}
+
+// Handle TEST_FRAMEWORK_DIR with a helpful error message if not set.
+$test_framework_subdir = get_setting('TEST_FRAMEWORK_DIR');
+if (empty($test_framework_subdir)) {
+    $default_framework_dir = 'gl-phpunit-test-framework';
+    $default_framework_path = make_path(PROJECT_DIR, 'tests', $default_framework_dir);
+
+    if (is_dir($default_framework_path)) {
+        // The default directory exists, so we can give a very helpful error.
+        echo esc_cli(COLOR_RED . "Error: The required setting TEST_FRAMEWORK_DIR is not defined in $env_file_path ." . COLOR_RESET . "\n");
+        echo esc_cli(COLOR_YELLOW . "A default directory was found at '{$default_framework_path}'." . COLOR_RESET . "\n");
+        echo esc_cli(COLOR_YELLOW . "Please add the following line to your tests/.env.testing file:" . COLOR_RESET . "\n");
+        echo esc_cli("TEST_FRAMEWORK_DIR={$default_framework_dir}" . "\n");
+    } else {
+        // It's not set and the default doesn't exist. This is a fatal error.
+        echo esc_cli(COLOR_RED . "Error: The required setting TEST_FRAMEWORK_DIR is not defined in tests/.env.testing." . COLOR_RESET . "\n");
+        echo esc_cli(COLOR_RED . "Please set it to the correct path for your test framework source (e.g., gl-phpunit-test-framework)." . COLOR_RESET . "\n");
+    }
+    exit(1);
+}
+
+// Get the plugin slug from settings, with a fallback to the project directory name.
+$plugin_slug = get_setting('YOUR_PLUGIN_SLUG');
+if (empty($plugin_slug)) {
+    $plugin_slug = basename(PROJECT_DIR);
+    echo esc_cli(COLOR_YELLOW . "Warning: YOUR_PLUGIN_SLUG is not set in tests/.env.testing. Falling back to the project directory name: '{$plugin_slug}'." . COLOR_RESET . "\n");
+}
+
+// Define source and destination paths for framework files
+$framework_source_base = make_path(PROJECT_DIR, 'tests', $test_framework_subdir);
+$framework_bin_source    = make_path($framework_source_base, 'bin');
+$framework_bootstrap_source = make_path($framework_source_base, 'tests', 'bootstrap');
+
+echo "DEBUG: PROJECT_DIR: " . PROJECT_DIR . " \nframework_source_base: $framework_source_base \nDefault_framework_path: $default_framework_path\n";
+
+$dest_tests_dir  = make_path(PROJECT_DIR, 'tests');
+$dest_bin_dir    = make_path($dest_tests_dir, 'bin');
+$dest_bootstrap_dir = make_path($dest_tests_dir, 'bootstrap');
+
+// Verify that the determined framework source directory exists
+if (!is_dir($default_framework_path)) {
+    echo esc_cli(COLOR_RED . "Error: Test framework source directory not found at: {$default_framework_path}" . COLOR_RESET . "\n");
+    echo esc_cli(COLOR_RED . "Please ensure TEST_FRAMEWORK_DIR in {$env_file_path} is set correctly and the directory exists." . COLOR_RESET . "\n");
+    exit(1);
+}
+
+// Ensure destination directories exist
+if (!is_dir($dest_bin_dir)) {
+    if (!mkdir($dest_bin_dir, 0755, true)) {
+        echo esc_cli(COLOR_RED . "Error: Failed to create destination directory: {$dest_bin_dir}" . COLOR_RESET . "\n");
+        exit(1);
+    }
+}
+if (!is_dir($dest_bootstrap_dir)) {
+    if (!mkdir($dest_bootstrap_dir, 0755, true)) {
+        echo esc_cli(COLOR_RED . "Error: Failed to create destination directory: {$dest_bootstrap_dir}" . COLOR_RESET . "\n");
+        exit(1);
+    }
+}
+
+// Files to copy from framework bin to project's tests/bin
+// Excludes setup-plugin-tests.php itself to prevent overwriting the running script if it's already in the destination.
+$bin_files_to_copy = ['framework-functions.php', 'phpcbf.sh', 'sync-and-test.php', 'sync-to-wp.php', 'test-env-requirements.php'];
+
+echo esc_cli("Copying framework bin files to: {$dest_bin_dir}\n");
+foreach ($bin_files_to_copy as $file) {
+    $source_file = make_path($framework_bin_source, $file);
+    $dest_file   = make_path($dest_bin_dir, $file);
+    if (file_exists($source_file)) {
+        if (copy($source_file, $dest_file)) {
+            echo esc_cli(COLOR_GREEN . "  Copied: {$file}" . COLOR_RESET . "\n");
+        } else {
+            echo esc_cli(COLOR_RED . "  Error copying: {$file} to {$dest_file}" . COLOR_RESET . "\n");
+        }
+    } else {
+        echo esc_cli(COLOR_YELLOW . "  Warning: Source file not found, skipped: {$source_file}" . COLOR_RESET . "\n");
+    }
+}
+
+// Copy bootstrap config files (e.g., phpunit.xml)
+if (is_dir($framework_bootstrap_source)) {
+    echo esc_cli("Copying framework bootstrap files to: {$dest_bootstrap_dir}\n");
+    foreach (glob(make_path($framework_bootstrap_source, '*.xml')) as $config_file_source) {
+        $dest_file = make_path($dest_bootstrap_dir, basename($config_file_source));
+        if (copy($config_file_source, $dest_file)) {
+            echo esc_cli(COLOR_GREEN . "  Copied: " . basename($config_file_source) . COLOR_RESET . "\n");
+        } else {
+            echo esc_cli(COLOR_RED . "  Error copying: " . basename($config_file_source) . " to {$dest_file}" . COLOR_RESET . "\n");
+        }
+    }
+} else {
+    echo esc_cli(COLOR_YELLOW . "Warning: Framework bootstrap source directory not found, skipped: {$framework_bootstrap_source}" . COLOR_RESET . "\n");
+}
 
 $test_error_log = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
 
 
 /**
- * Check system requirements
+ * Check system requirements.
  *
- * @return bool True if all requirements are met, false otherwise
+ * This function checks for the availability of Git, verifies that Lando is running (if applicable),
+ * and tests the MySQL database connection.
+ *
+ * @param string $ssh_command The command used for SSH connections (e.g., 'lando ssh', 'none').
+ * @param array  $db_settings An array of database connection settings.
+ * @return bool True if all requirements are met, false otherwise.
  */
-function check_system_requirements(): bool {
+function check_system_requirements(string $ssh_command, array $db_settings): bool {
     echo esc_cli("Checking system requirements...\n");
+    $all_ok = true;
 
-    // Check if git is available
-    if (!is_executable(exec('which git'))) {
-        echo esc_cli("Error: git is required but not installed.\n");
-        return false;
+    // 1. Check for Git
+    exec('git --version', $git_output, $git_return_code);
+    if ($git_return_code !== 0) {
+        echo esc_cli(COLOR_RED . '❌ Git is not installed or not in PATH.' . COLOR_RESET . "\n");
+        $all_ok = false;
+    } else {
+        echo esc_cli(COLOR_GREEN . '✅ Git is available.' . COLOR_RESET . "\n");
     }
 
-    // Check if mysql client is available
-    if (!is_executable(exec('which mysql'))) {
-        echo esc_cli("Error: mysql client is required but not installed.\n");
-        return false;
+    // 2. If using Lando, check if it's running
+    if (strpos($ssh_command, 'lando') !== false) {
+        if (!is_lando_environment()) {
+            echo esc_cli(COLOR_RED . '❌ Lando environment is not running. Please start it with `lando start`.' . COLOR_RESET . "\n");
+            $all_ok = false;
+        } else {
+            echo esc_cli(COLOR_GREEN . '✅ Lando is running.' . COLOR_RESET . "\n");
+        }
     }
 
-    // Check if PHP is available (obviously it is if we're running this script)
-    echo esc_cli(COLOR_GREEN . '✅ System requirements met' . COLOR_RESET . "\n");
-    return true;
+    // 3. Check MySQL connection
+    $mysql_check_cmd = format_mysql_execution($ssh_command, $db_settings['db_host'], $db_settings['db_user'], $db_settings['db_pass'], 'SELECT 1');
+    exec($mysql_check_cmd, $mysql_output, $mysql_return_code);
+
+    if ($mysql_return_code !== 0) {
+        echo esc_cli(COLOR_RED . '❌ MySQL connection failed. Please check your database credentials and that the server is running.' . COLOR_RESET . "\n");
+        echo esc_cli('Error details: ' . implode("\n", $mysql_output) . "\n");
+        $all_ok = false;
+    } else {
+        echo esc_cli(COLOR_GREEN . '✅ MySQL connection successful.' . COLOR_RESET . "\n");
+    }
+
+    if (!$all_ok) {
+        echo esc_cli(COLOR_YELLOW . "\nPlease resolve the issues above before proceeding.\n" . COLOR_RESET);
+    }
+
+    return $all_ok;
 }
 
 
@@ -143,7 +280,7 @@ function download_wp_tests( string $wp_tests_dir ): bool {
     system($cmd, $return_var);
 
     if ($return_var !== 0) {
-        echo esc_cli("Error: Failed to clone WordPress develop repository.\n");
+        echo esc_cli("Error: Failed to `git clone` WordPress develop repository.\n");
         return false;
     }
 
@@ -308,6 +445,8 @@ function install_test_suite(
     $mysql_cmd = 'mysql';
     $use_ssh = false;
 
+
+/** This whole "determine how to execute" section is probably messed up. What about ssh to a remote,  so SSH_COMMNAD !='ssh'?  */
     // Determine how to execute database commands
     echo 'Database access method from .env.testing: ' . COLOR_CYAN . 'SSH_COMMAND=' . ( $ssh_command ?: 'not set' ) . COLOR_RESET . "\n";
     if ($ssh_command === 'none') {
@@ -381,7 +520,7 @@ function install_test_suite(
 
     // Build the SQL command using heredoc for better readability
     // Write SQL exactly as you would type it directly into MySQL
-    // The format_mysql_command function will handle all necessary escaping
+    // The format_mysql_execution function will handle all necessary escaping
     $sql_command = <<<DB_SETUP
 CREATE DATABASE IF NOT EXISTS $db_name;
 CREATE USER IF NOT EXISTS "$db_user"@"%" IDENTIFIED BY "$db_pass";
@@ -504,7 +643,7 @@ EOT;
 
     // For Lando PHP commands, we need to be careful with quotes and paths
     if ($targeting_lando) {
-        // Use lando php directly, which works from outside the container
+        // Use lando php directly, which *only* works from *outside* the container
         echo "Using lando php to execute the installation script...\n";
         $command = "lando php \"/app/wp-content/plugins/wordpress-develop/tests/phpunit/includes/install.php\" \"/app/wp-content/plugins/wordpress-develop/tests/phpunit/wp-tests-config.php\"";
     } else {
@@ -645,25 +784,9 @@ function display_help(): void {
  * Main execution
  */
 
-// Parse command line arguments
-$remove_all = false;
-$show_help = false;
-
-// Get command line arguments if running from CLI
-$args = [];
-if (isset($argv) && is_array($argv)) {
-    $args = $argv;
-} elseif (php_sapi_name() === 'cli' && isset($_SERVER['argv'])) {
-    $args = $_SERVER['argv'];
-}
-
-foreach ($args as $arg) {
-    if ($arg === '--remove-all' || $arg === '--remove') {
-        $remove_all = true;
-    } elseif ($arg === '--help' || $arg === '-h') {
-        $show_help = true;
-    }
-}
+// Parse command line arguments using the new helper functions
+$remove_all = has_cli_flag(['--remove-all', '--remove']);
+$show_help = has_cli_flag(['--help', '-h']);
 
 // Display help if requested
 if ($show_help) {
@@ -685,14 +808,38 @@ if (!empty($wp_root) && is_dir($wp_root)) {
 
 echo "Setting up WordPress plugin tests...\n";
 
+// SSH command for database operations
+$ssh_command = get_setting('SSH_COMMAND', 'none');
+
+// Get WordPress configuration path
+$wp_config_path = "$wp_root/wp-config.php";
+
+// Get Lando info by executing 'lando info' command
+$lando_info_array = get_lando_info();
+// if (!empty($lando_info_array)) {
+    // echo "Using Lando database configuration for WordPress testing.\n";
+// }
+
+// Get WordPress database settings
+$wp_db_settings = get_database_settings($wp_config_path, $lando_info_array);
+
+echo "Checking system requirements\n";
+
 // Check system requirements
-if (!check_system_requirements()) {
+if (!check_system_requirements($ssh_command, $wp_db_settings)) {
     exit(1);
 }
 
 // Set up paths and configuration
 $plugin_dir = PROJECT_DIR;
-$plugin_slug = basename($plugin_dir);
+
+// Get plugin slug from settings, with a fallback to the directory name
+$plugin_slug = get_setting('YOUR_PLUGIN_SLUG');
+if (empty($plugin_slug)) {
+    $plugin_slug = basename($plugin_dir);
+    echo esc_cli(COLOR_YELLOW . "Warning: YOUR_PLUGIN_SLUG is not set in tests/.env.testing. Falling back to directory name '{$plugin_slug}'." . COLOR_RESET . "\n");
+    echo esc_cli(COLOR_YELLOW . "It is recommended to set YOUR_PLUGIN_SLUG explicitly." . COLOR_RESET . "\n");
+}
 
 // Load all settings once at the beginning
 
@@ -700,9 +847,6 @@ $plugin_slug = basename($plugin_dir);
 $wp_root = get_setting('WP_ROOT', '[not set]'); // Container path (/app)
 $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '[not set]'); // Host path
 $wp_tests_dir_setting = get_setting('WP_TESTS_DIR', '[not set]'); // WordPress test directory
-
-// SSH command for database operations
-$ssh_command = get_setting('SSH_COMMAND', 'none');
 
 // For local environment, try to find WordPress root if not specified in settings
 if (empty($wp_root)) {
@@ -720,18 +864,6 @@ if (empty($wp_root)) {
     echo "Using WordPress root from settings: $wp_root\n";
     echo "Using Filesystem path: $filesystem_wp_root\n";
 }
-
-// Get WordPress configuration path
-$wp_config_path = "$wp_root/wp-config.php";
-
-// Get Lando info by executing 'lando info' command
-$lando_info_array = get_lando_info();
-// if (!empty($lando_info_array)) {
-    // echo "Using Lando database configuration for WordPress testing.\n";
-// }
-
-// Get WordPress database settings
-$wp_db_settings = get_database_settings($wp_config_path, $lando_info_array);
 
 // Get custom PHPUnit database settings from environment variables
 $test_db_name = get_setting('WP_TESTS_DB_NAME', null);
@@ -784,7 +916,7 @@ $wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plug
     '/wordpress-develop/tests/phpunit',
 */
 
-// echo "Using WordPress test directory: $wp_tests_dir\n";
+echo "Using WordPress test directory: $wp_tests_dir\n";
 
 // If --remove-all flag is set, remove test suite and exit
 if ($remove_all) {
@@ -837,10 +969,8 @@ echo "WordPress plugin test setup completed successfully.\n";
 echo "Changing back to original directory: $original_dir\n";
 chdir($original_dir);
 
-// Instructions for running tests
-echo "\n1. To run integration tests:\n";
-echo "- Make sure your WordPress test environment is set up\n";
-echo "- Run: composer test:integration\n";
-echo "2. For unit tests: composer test:unit\n";
-echo "3. For WP-Mock tests: composer test:wp-mock\n\n";
-echo "-----\n\n";
+// Instructions for running tests.
+// We calculate the destination path here to provide accurate instructions for the user.
+$folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+$plugin_dest_dir     = make_path($filesystem_wp_root, $folder_in_wordpress, $plugin_slug);
+display_composer_test_instructions( is_lando_environment(), $plugin_dest_dir );

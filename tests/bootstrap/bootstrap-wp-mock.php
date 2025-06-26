@@ -10,17 +10,30 @@
  * @see /docs/guides/phpunit-testing-tutorial.md#wp-mock-tests
  *
  * @package GL_WordPress_Testing_Framework
- * @subpackage Bootstrap
  */
 
 declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use WP_PHPUnit_Framework\Event\Listener\GlTestRunnerExecutionStartedListener;
+use WP_PHPUnit_Framework\Event\Listener\GlTestSuiteStartedListener;
 use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\get_phpunit_database_settings;
 use function WP_PHPUnit_Framework\get_setting;
 use function WP_PHPUnit_Framework\esc_cli;
+
+// The main bootstrap.php file handles autoloading, so it is not needed here.
+
+// Register the event subscribers for PHPUnit 11+
+if (class_exists('PHPUnit\Event\Facade')) {
+    echo "- Registering event subscribers with PHPUnit\n";
+    $subscriber = new GlTestRunnerExecutionStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
+
+    $subscriber = new GlTestSuiteStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
+}
 
 // Initialize error reporting
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);

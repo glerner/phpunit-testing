@@ -39,24 +39,15 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "WP_PHPUnit_Framework\\Tests\\": "tests/"
-        },
-        "files": [
-            "tests/bootstrap/bootstrap.php"
-        ],
-        "classmap": [
-            "tests/",
-            "tests/Unit/",
-            "tests/Integration/",
-            "tests/WP-Mock/"
-        ]
+            "WP_PHPUnit_Framework\\Tests\\": "tests/Framework/"
+        }
     },
     "scripts": {
         "test": "composer run-script test:unit && composer run-script test:wp-mock && composer run-script test:integration",
-        "test:unit": "phpunit -c tests/bootstrap/phpunit-unit.xml.dist",
-        "test:wp-mock": "phpunit -c tests/bootstrap/phpunit-wp-mock.xml.dist",
-        "test:integration": "phpunit -c tests/bootstrap/phpunit-integration.xml.dist",
-        "test:framework": "phpunit -c tests/bootstrap/phpunit-framework-tests.xml.dist",
+        "test:unit": "phpunit -c tests/bootstrap/phpunit-unit.xml",
+        "test:wp-mock": "phpunit -c tests/bootstrap/phpunit-wp-mock.xml",
+        "test:integration": "phpunit -c tests/bootstrap/phpunit-integration.xml",
+        "test:framework": "phpunit -c tests/bootstrap/phpunit-framework-tests.xml",
         "phpcs": "phpcs",
         "phpcbf": "composer run-script spaces_to_tabs && phpcbf",
         "check-style": "phpcs -p --standard=phpcs.xml",

@@ -16,22 +16,25 @@ declare(strict_types=1);
 
 namespace WP_PHPUnit_Framework\Bootstrap;
 
+use WP_PHPUnit_Framework\Event\Listener\GlTestRunnerExecutionStartedListener;
+use WP_PHPUnit_Framework\Event\Listener\GlTestSuiteStartedListener;
+
 use function WP_PHPUnit_Framework\get_setting;
 
 // Display test type header
 echo "\n=== Unit Test Setup ===\n";
 echo "Initializing unit test environment...\n";
 
-// Load the autoloader for our test listener
-echo "- Loading autoloader for test listener\n";
-require_once __DIR__ . '/../../vendor/autoload.php';
+// The main bootstrap.php file handles autoloading, so it is not needed here.
 
-// Register the test listener
+// Register the event subscribers for PHPUnit 11+
 if (class_exists('PHPUnit\Event\Facade')) {
-    echo "- Registering test listener with PHPUnit\n";
-    \PHPUnit\Event\Facade::registerListener(
-        new \WP_PHPUnit_Framework\Event\Listener\TestListener()
-    );
+    echo "- Registering event subscribers with PHPUnit\n";
+    $subscriber = new GlTestRunnerExecutionStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
+
+    $subscriber = new GlTestSuiteStartedListener($logDir);
+    \PHPUnit\Event\Facade::instance()->registerSubscriber($subscriber);
 }
 
 // Initialize Mockery

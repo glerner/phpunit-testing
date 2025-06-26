@@ -25,7 +25,7 @@
 
 declare(strict_types=1);
 
-namespace WP_PHPUnit_Framework\Bin;
+namespace WP_PHPUnit_Framework;
 
 // Define base paths
 define('PROJECT_DIR', dirname(__DIR__));
@@ -59,19 +59,26 @@ if (!is_dir(PHPUNIT_FRAMEWORK_DIR)) {
 }
 
 // Now we can safely include framework functions
-$framework_functions = PHPUNIT_FRAMEWORK_DIR . '/bin/framework-functions.php';
+$framework_functions = PROJECT_DIR . '/bin/framework-functions.php';
 if (!file_exists($framework_functions)) {
     echo "Error: Framework functions not found at: " . $framework_functions . "\n";
     exit(1);
 }
+
+echo "Framework functions: $framework_functions\n";
+
 require_once $framework_functions;
 
 use function WP_PHPUnit_Framework\load_settings_file;
 # use function WP_PHPUnit_Framework\get_phpunit_database_settings;
-use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\colored_message;
+use function WP_PHPUnit_Framework\display_composer_test_instructions;
 use function WP_PHPUnit_Framework\esc_cli;
+use function WP_PHPUnit_Framework\get_cli_value;
+use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\has_cli_flag;
 use function WP_PHPUnit_Framework\is_lando_environment;
-
+use function WP_PHPUnit_Framework\log;
 // Set default timezone to avoid warnings
 date_default_timezone_set('UTC');
 
@@ -90,49 +97,27 @@ if (!file_exists(PROJECT_DIR . '/vendor/autoload.php')) {
 }
 
 /**
- * Print a colored message to the console
- *
- * @param string $message The message to print
- * @param string $color   The color to use (green, yellow, red)
- * @return void
- */
-function colored_message(string $message, string $color = 'normal'): void {
-	$colors = [
-		'green'  => "\033[0;32m",
-		'yellow' => "\033[1;33m",
-		'red'    => "\033[0;31m",
-		'blue'   => "\033[0;34m",
-		'normal' => "\033[0m",
-	];
-
-	$start_color = isset($colors[$color]) ? $colors[$color] : $colors['normal'];
-	$end_color   = $colors['normal'];
-
-	echo esc_cli($start_color . $message . $end_color . "\n");
-}
-
-/**
- * Print usage information
+ * Display usage information
  *
  * @return void
  */
-function print_usage(): void {
+function display_help(): void {
     $script = basename(__FILE__);
 
     colored_message("Usage:", 'blue');
-    echo esc_cli("  php $script [options] [--file=<file>]\n\n");
+    colored_message("  php $script [options] [--file=<file>]\n\n");
 
     colored_message("Test Types:", 'blue');
-    echo esc_cli(sprintf("  %-12s %s\n", "--unit", "Run fast unit tests (no WordPress)"));
-    echo esc_cli(sprintf("  %-12s %s\n", "--wp-mock", "Run WP Mock tests (mocked WordPress)"));
-    echo esc_cli(sprintf("  %-12s %s\n", "--integration", "Run integration tests (full WordPress)"));
-    echo esc_cli(sprintf("  %-12s %s\n\n", "--all", "Run all test types"));
+    colored_message(sprintf("  %-12s %s\n", "--unit", "Run fast unit tests (no WordPress)"));
+    colored_message(sprintf("  %-12s %s\n", "--wp-mock", "Run WP Mock tests (mocked WordPress)"));
+    colored_message(sprintf("  %-12s %s\n", "--integration", "Run integration tests (full WordPress)"));
+    colored_message(sprintf("  %-12s %s\n\n", "--all", "Run all test types"));
 
     colored_message("Options:", 'blue');
-    echo esc_cli(sprintf("  %-20s %s\n", "--file=<file>", "Run a specific test file"));
-    echo esc_cli(sprintf("  %-20s %s\n", "--coverage", "Generate HTML coverage report"));
-    echo esc_cli(sprintf("  %-20s %s\n", "--verbose", "Show detailed output"));
-    echo esc_cli(sprintf("  %-20s %s\n\n", "--help", "Show this help"));
+    echo "  --file=<file>          Run a specific test file\n";
+    echo "  --coverage             Generate HTML coverage report\n";
+    echo "  --verbose              Use TestDox for PHPUnit output and show script debug messages.\n";
+    echo "  --help                 Show this help\n\n";
 
     colored_message("Environment Variables:", 'blue');
     echo esc_cli(sprintf("  %-25s %s\n", "WP_TESTS_DIR", "Path to WordPress test library"));
@@ -147,7 +132,7 @@ function print_usage(): void {
     echo esc_cli("  # Run a specific test file\n");
     echo esc_cli("  php $script --file=tests/Unit/ExampleTest.php\n\n");
 
-    echo esc_cli("  # Run with verbose output\n");
+    echo esc_cli("  # Run with verbose script output and TestDox test format\n");
     echo esc_cli("  php $script --unit --verbose\n");
 }
 
@@ -163,29 +148,18 @@ $options = [
 	'file'        => '',
 ];
 
-foreach ($argv as $arg) {
-	if (strpos($arg, '--file=') === 0) {
-		$options['file'] = substr($arg, 7);
-	} elseif ($arg === '--unit') {
-		$options['unit'] = true;
-	} elseif ($arg === '--wp-mock') {
-		$options['wp-mock'] = true;
-	} elseif ($arg === '--integration') {
-		$options['integration'] = true;
-	} elseif ($arg === '--all') {
-		$options['all'] = true;
-	} elseif ($arg === '--coverage') {
-		$options['coverage'] = true;
-	} elseif ($arg === '--verbose') {
-		$options['verbose'] = true;
-	} elseif ($arg === '--help' || $arg === '-h') {
-		$options['help'] = true;
-	}
-}
+$options['file']        = get_cli_value(['--file']);
+$options['unit']        = has_cli_flag('--unit');
+$options['wp-mock']     = has_cli_flag('--wp-mock');
+$options['integration'] = has_cli_flag('--integration');
+$options['all']         = has_cli_flag('--all');
+$options['coverage']    = has_cli_flag('--coverage');
+$options['verbose']     = has_cli_flag('--verbose');
+$options['help']        = has_cli_flag(['--help', '-h']);
 
 // Show help if requested or if no test type is specified
 if ($options['help'] || (!$options['unit'] && !$options['wp-mock'] && !$options['integration'] && !$options['all'])) {
-	print_usage();
+	display_help();
 	exit(0);
 }
 
@@ -241,6 +215,16 @@ echo esc_cli("  Filesystem WordPress root: " . $filesystem_wp_root . "\n");
 echo esc_cli("  WordPress container root: " . $wp_root . "\n");
 echo esc_cli("  Plugin destination: " . $your_plugin_dest . "\n");
 echo esc_cli("  Test run path: " . $test_run_path . "\n");
+
+echo "sync-and-test folder: " . __DIR__ . "\n";
+
+// After tests run, show instructions.
+if ( ! has_cli_flag( '--no-instructions' ) ) {
+	$is_lando   = is_lando_environment();
+	echo "\n--- Test Instructions ---\n";
+	display_composer_test_instructions( $is_lando, $your_plugin_dest );
+	echo "-------------------------\n";
+}
 
 // Check if we're targeting Lando via SSH_COMMAND
 $ssh_command = get_setting('SSH_COMMAND', '');
@@ -326,10 +310,6 @@ if ($sync_return !== 0) {
 $tests_dir = $your_plugin_dest . DIRECTORY_SEPARATOR . 'tests';
 colored_message("\nStep 2: Changing to WordPress plugin Tests directory...", 'green');
 
-if ($options['verbose']) {
-    colored_message("Attempting to change to directory: $tests_dir", 'blue');
-}
-
 if (!chdir($tests_dir)) {
     $error = error_get_last();
     $error_msg = $error ? $error['message'] : 'Unknown error';
@@ -352,6 +332,7 @@ if ($options['verbose']) {
 
 // Step 3: Run the tests
 colored_message("\nStep 3: Running tests...", 'green');
+check_phpunit_exists($test_run_path, $your_plugin_dest, $targeting_lando);
 
 /**
  * Build a PHPUnit command with the appropriate options
@@ -417,7 +398,7 @@ function build_phpunit_command($test_type, $options, $test_run_path) {
 
     // Add verbose option if requested
     if ($options['verbose']) {
-        $cmd .= ' --verbose';
+        $cmd .= ' --testdox';
     }
 
     // Add test filter if provided
@@ -427,10 +408,52 @@ function build_phpunit_command($test_type, $options, $test_run_path) {
 
     return $cmd;
 }
+
+/**
+ * Check if the PHPUnit executable exists and exit with an error if it doesn't.
+ *
+ * @param string $test_run_path The base path for the test execution.
+ * @param string $your_plugin_dest The destination directory of the plugin.
+ * @param bool $targeting_lando Whether the test is targeting a Lando environment.
+ * @return void
+ */
+function check_phpunit_exists($test_run_path, $your_plugin_dest, $targeting_lando)
+{
+    $framework_dir_setting = get_setting('TEST_FRAMEWORK_DIR');
+
+    // Use the HOST path for file_exists()
+    $host_composer_dir = $your_plugin_dest . '/tests/' . $framework_dir_setting;
+    $host_phpunit_path = $host_composer_dir . '/vendor/bin/phpunit';
+
+    if (file_exists($host_phpunit_path)) {
+        return;
+    }
+
+    // Use the CONTAINER path for the error message
+    $container_composer_dir = $test_run_path . '/' . $framework_dir_setting;
+
+    colored_message("PHPUnit executable not found on the host at: $host_phpunit_path with Host Composer Dir $host_composer_dir", 'red');
+    colored_message('Your Composer dependencies may be missing or out of date in the testing environment.', 'yellow');
+
+    if ($targeting_lando) {
+        colored_message('To fix this, run the following command inside your Lando container:', 'yellow');
+        colored_message("cd $container_composer_dir && composer install", 'cyan');
+    } else {
+        colored_message("Please run 'composer install' or 'composer update' in the following directory inside your testing environment:", 'yellow');
+        colored_message($host_composer_dir, 'cyan');
+    }
+
+    $docs_path = 'tests/' . $framework_dir_setting . '/docs/guides/';
+    colored_message('For more detailed instructions, see the documentation in your project at:', 'yellow');
+    colored_message('- ' . $docs_path . 'composer-cleanup.md', 'cyan');
+    colored_message('- ' . $docs_path . 'rebuilding-after-system-updates.md', 'cyan');
+    exit(1);
+}
 // Execute tests based on the selected type
 if ($options['unit']) {
     // Run unit tests
     colored_message("Running unit tests...", 'blue');
+
     $phpunit_cmd = build_phpunit_command('unit', $options, $test_run_path);
     colored_message("Executing: $phpunit_cmd", 'blue');
     passthru($phpunit_cmd, $phpunit_return);
