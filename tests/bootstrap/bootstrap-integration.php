@@ -51,7 +51,7 @@ if (empty($wp_tests_dir) || !is_dir($wp_tests_dir)) {
         "/tmp/wordpress-tests-lib-phpunit",
         dirname(dirname(FRAMEWORK_DIR)) . '/wordpress-develop/tests/phpunit',
     ];
-    
+
     foreach ($possible_paths as $path) {
         if (is_dir($path)) {
             $wp_tests_dir = $path;
@@ -77,6 +77,20 @@ echo "Using WordPress test library from: $wp_tests_dir\n";
 // The main bootstrap.php file handles autoloading, so it is not needed here.
 
 // Load the WordPress test bootstrap file
+// Set path for PHPUnit Polyfills to satisfy WordPress test suite requirements
+// This is needed because `WordPress test suite` requires PHPUnit Polyfills even with PHPUnit 11+
+// but the current version of PHPUnit Polyfills doesn't officially support PHPUnit 11 yet
+$polyfills_path = get_setting('WP_PHPUNIT_POLYFILLS_PATH');
+if (!empty($polyfills_path)) {
+    if (!defined('WP_TESTS_PHPUNIT_POLYFILLS_PATH')) {
+        define('WP_TESTS_PHPUNIT_POLYFILLS_PATH', $polyfills_path);
+        echo "Using PHPUnit Polyfills from: {$polyfills_path}\n";
+    }
+} else {
+    echo "Warning: WP_PHPUNIT_POLYFILLS_PATH not set in .env.testing. Integration tests may fail.\n";
+    echo "You need to install a compatible version of yoast/phpunit-polyfills somewhere and set the path.\n";
+}
+
 echo "Loading WordPress test include from: {$wp_tests_dir}/includes/bootstrap.php\n";
 require_once $wp_tests_dir . '/includes/bootstrap.php';
 

@@ -39,13 +39,23 @@ The framework includes a comprehensive set of development tools to support diffe
 
 ### Composer Configuration
 
-To prevent class loading conflicts between your project and the testing framework, add this to your project's `composer.json`:
+To ensure your plugin's autoloader can find the framework's classes and to prevent conflicts, add the following configuration to your plugin's root `composer.json`:
 
 ```json
-"autoload-dev": {
-    "exclude-from-classmap": [
-        "**/tests/gl-phpunit-test-framework/vendor/"
-    ]
+{
+    "autoload": {
+        "psr-4": {
+            "Your\\Plugin\\Namespace\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WP_PHPUnit_Framework\\": "tests/gl-phpunit-test-framework/src/"
+        },
+        "exclude-from-classmap": [
+            "**/tests/gl-phpunit-test-framework/vendor/**"
+        ]
+    }
 }
 ```
 
@@ -55,10 +65,88 @@ This ensures the testing framework's dependencies won't conflict with your proje
 
 Before installing the testing tools, ensure you have:
 
-- PHP 8.0 or higher (for WordPress, should use PHP 8.0+)
+- PHP 8.2 or higher (WordPress should use PHP 8.0+, but this is requires 8.2+)
 - Composer installed and available in your path
 - Git (for cloning repositories)
 - MySQL/MariaDB (for integration tests)
+
+## Remove Conflicting Testing Software
+
+### Resolving PHPUnit Version Conflicts in Lando
+
+**Problem:** You encounter fatal errors like `Class "PHPUnit\Framework\Error\Deprecated" not found` when running tests. This often indicates a conflict between multiple PHPUnit installations.
+
+**Cause:** This typically occurs in a Lando (or Docker, or other container environment) when there is a "global" PHPUnit installation in your WordPress root directory (e.g., `~/sites/wordpress/vendor/phpunit`) that conflicts with the specific version of PHPUnit required by your plugin (located in `~/sites/your-plugin/vendor/phpunit`).
+
+**Solution:** Ensure that only your plugin manages its own testing dependencies. The WordPress root installation should only contain global development tools like static analyzers, not testing libraries.
+
+**Step 1: Clean Up Root `composer.json`**
+
+In your WordPress root directory (e.g., `~/sites/wordpress/composer.json`), remove any testing-specific libraries. Only development utilities like `phpcs` or `phpstan` should remain.
+
+- **REMOVE** these packages from `require-dev`:
+  - `phpunit/phpunit`
+  - `phpunit/php-code-coverage`
+  - `yoast/phpunit-polyfills`
+  - `10up/wp_mock`
+  - `brain/monkey`
+
+Your plugin's `composer.json` should be the single source of truth for these testing packages.
+
+**Step 2: Clean Up Root `.lando.yml`**
+
+In your WordPress root's `.lando.yml`, check the `services.appserver.composer` section. Ensure it does **not** contain an entry for `phpunit/phpunit`.
+
+**Incorrect `.lando.yml` Example:**
+```yaml
+services:
+  appserver:
+    composer:
+      phpunit/phpunit: "^9.6" # <-- REMOVE THIS LINE
+```
+
+By commenting out or removing this line, you prevent Lando from installing a conflicting global version of PHPUnit.
+
+**Step 3: Apply the Changes**
+
+After cleaning up your configuration files, run the following commands from your WordPress root directory (`~/sites/wordpress`) to apply the changes:
+
+```bash
+# 1. Update composer dependencies to remove the old packages
+lando composer update
+
+# 2. Rebuild the Lando environment to apply .lando.yml changes
+lando rebuild -y
+```
+
+> **Note:** For detailed guidance on the correct sequence for running Composer updates across your projects, refer to the [Composer Update Workflow](composer-update-sequence.md) guide.
+
+This process ensures your plugin's isolated testing environment works correctly without interference from global installations.
+
+### Local (formerly Local by Flywheel)
+
+The principle is identical to Lando. Local runs WordPress in a containerized environment, but without a `.lando.yml` file.
+
+1.  **Find the Root `composer.json`**: Navigate to your site's root directory, which is typically `~/Local Sites/your-site-name/app/public/`.
+2.  **Clean the `composer.json`**: Edit the file and remove the same testing libraries as listed in the Lando instructions (`phpunit/phpunit`, `wp_mock`, etc.).
+3.  **Apply Changes**: Open the site shell in Local ("Open site shell" button) and run `composer update` from the `app/public` directory to remove the packages. For detailed guidance on the correct update sequence, refer to the [Composer Update Workflow](composer-update-sequence.md) guide.
+
+### XAMPP, MAMP, WAMP (Non-Containerized Environments)
+
+With these environments, Composer and PHP run directly on your operating system. Conflicts can come from two places:
+
+1.  **WordPress Root `composer.json`**:
+    -   **Check**: Look for a `composer.json` file in your WordPress root directory (e.g., `C:\xampp\htdocs\wordpress\`).
+    -   **Fix**: If it exists, remove the conflicting testing libraries (`phpunit/phpunit`, etc.) as described above and run `composer update` in that directory. For detailed guidance on the correct update sequence, refer to the [Composer Update Workflow](composer-update-sequence.md) guide.
+
+2.  **Global Composer Installation**:
+    -   **Check**: A "globally" installed PHPUnit can also cause conflicts. You can check for it by running `composer global show phpunit/phpunit`.
+    > **Note:** If you see the message `Package "phpunit/phpunit" not found`, this is good news! It means you do not have a conflicting global installation.
+    -   **Fix**: If it's installed globally, remove it. The best practice is to always rely on project-specific dependencies.
+        ```bash
+        composer global remove phpunit/phpunit
+        ```
+    This ensures that only the `composer.json` inside your plugin's directory controls which version of PHPUnit is used.
 
 ## Development Workflow
 
@@ -132,24 +220,29 @@ This hook will prevent you from accidentally committing changes directly to the 
 3. Commit and push from the submodule directory
 
 
-# Commit the update in your main repo
-git commit -m "Update phpunit-testing submodule to latest upstream"
-```
-
-Alternatively, you can update manually:
+To update the testing framework to the latest version, run the following commands:
 
 ```bash
+# From your plugin's root directory, pull the latest framework code
+git submodule update --remote --merge
+
+# cd into the framework directory and update its dependencies
 cd tests/gl-phpunit-test-framework
-git checkout main      # or master, or whichever branch you want
-git pull origin main   # fetch latest changes
+composer update
+
+# For detailed guidance on the correct sequence for updating dependencies in the framework,
+# refer to the Composer Update Workflow guide: composer-update-sequence.md
+
+# Return to your plugin's root and stage the updated submodule
 cd ../..
 git add tests/gl-phpunit-test-framework
-git commit -m "Update phpunit-testing submodule"
 ```
 
-Always commit the submodule pointer change in your main repo after updating.
-
 You should make a dedicated git commit in your main project specifically for the PHPUnit Framework submodule update. This is considered best practice for clarity and history tracking.
+
+```bash
+git commit -m "Update phpunit-testing submodule"
+```
 
 - Submodule updates are independent of your main project’s code/content changes.
 - Keeping the update in a separate commit makes it easy to see when and why the test framework was updated.
@@ -196,16 +289,16 @@ It is best practice to make this a dedicated commit, separate from your applicat
 
 
 
-## Copy the Setup script
+## Copy the Bin scripts and Bootstrap Files
 
 From your plugin root folder:
 
 ```bash
-mkdir tests/bin
-cp tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php bin/setup-plugin-tests.php
-cp tests/gl-phpunit-test-framework/tests/bootstrap/* ./tests/bootstrap/
+mkdir bin
+cp tests/gl-phpunit-test-framework/bin/copy-sync-and-bootstrap-files.php ./bin/
+php bin/copy-sync-and-bootstrap-files.php
 ```
-- Your most frequently used scripts will be in your tests/bin folder.
+- Your most frequently used scripts will be in your `bin` folder.
 - Your tests will be in folders of your tests/ folder.
 - You won't often need anything in your tests/gl-phpunit-test-framework folder.
 
@@ -217,19 +310,7 @@ PHPUnit is the core testing framework we'll use. We recommend installing it via 
 
 This package requires PHPUnit 11.x due to compatibility requirements with other dependencies.
 
-If you wanted to install it manually, you would:
-
-```bash
-# Navigate to your plugin project directory (outside WordPress)
-cd ~/sites/your-plugin-project
-
-# Add PHPUnit as a dev dependency
-# This will create or update your composer.json
-composer require --dev phpunit/phpunit ^11.0
-```
-*Do Not* run the default PHPUnit installation instructions. This package has much better installation, instructions below.
-
-> **Note:** The version of PHPUnit you use should be compatible with your PHP version. For PHP 7.4+ and PHP 8.0+, PHPUnit 11.x is recommended.
+> **Note:** PHPUnit 11.x requires PHP 8.2+.
 
 ## Installing WP_Mock
 
@@ -237,25 +318,11 @@ This is installed automatically by this package.
 
 WP_Mock is a library that provides a framework for mocking WordPress functions and classes.
 
-If you wanted to install it manually, you would run:
-
-```bash
-# Add WP_Mock as a dev dependency
-composer require --dev 10up/wp_mock ^0.4
-```
-
 ## Installing Brain\Monkey
 
 This is installed automatically by this package.
 
 Brain\Monkey complements WP_Mock by providing additional mocking capabilities for WordPress functions.
-
-If you wanted to install it manually, you would run:
-
-```bash
-# Add Brain\Monkey as a dev dependency
-composer require --dev brain/monkey ^2.6
-```
 
 Brain\Monkey is particularly useful for:
 - Mocking WordPress functions
@@ -460,13 +527,15 @@ This framework provides a PHP script to set up the WordPress test environment. T
 Before running the script, make sure your `.env.testing` file has the correct `SSH_COMMAND` setting for your environment.
 
 
-Then run the setup script from your plugin development directory. This will install the test framework in your WordPress plugin directory:
+Then run the setup script from your plugin development main directory. This will install the test framework in your WordPress plugin directory:
 ```bash
-php bin/setup-plugin-tests.php
+cd ~/sites/yourplugin
+php tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php
 ```
 
 This script will:
 - Download the WordPress testing suite from the official WordPress develop repository
+- Install PHPUnit Polyfills for WordPress integration tests (automatically configured in wp-tests-config.php)
 - Configure the test database (using the SSH_COMMAND setting for database operations)
 - Set up necessary configuration files
 - Create test directories if they don't exist
@@ -666,61 +735,53 @@ Here's a sample `composer.json` configuration for a WordPress plugin with testin
 
 ```json
 {
-    "name": "your-vendor/your-plugin",
-    "description": "Your WordPress Plugin Description",
+    "name": "gl/reinvent",
+    "description": "Reinvent - A WordPress plugin for personal transformation journeys",
+    "version": "1.0.0",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
+    "minimum-stability": "stable",
+    "authors": [
+        {
+            "name": "George Lerner",
+            "email": "github@glerner.com"
+        }
+    ],
     "require": {
         "php": ">=8.2"
+    },
+    "require-dev": {
+        "mockery/mockery": "^1.4",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "GL_Reinvent\\": "src/"
+        },
+        "exclude-from-classmap": [
+            "tests/gl-phpunit-test-framework/vendor/"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
             "WP_PHPUnit_Framework\\": "tests/gl-phpunit-test-framework/src/"
-        }
+        },
+        "classmap": [
+            "tests/Integration",
+            "tests/Unit",
+            "tests/WP-Mock"
+        ],
+        "exclude-from-classmap": [
+            "tests/gl-phpunit-test-framework/vendor/",
+            "tests/gl-phpunit-test-framework/src/Stubs"
+        ]
     },
-    "require-dev": {
-        "phpunit/phpunit": "^9.5",
-        "10up/wp_mock": "^0.4",
-        "brain/monkey": "^2.6",
-        "glerner/phpunit-testing": "dev-main"
-        "mockery/mockery": "^1.4",
-        "yoast/phpunit-polyfills": "^1.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "YourVendor\\YourPlugin\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "YourVendor\\YourPlugin\\Tests\\": "tests/"
-        }
-    },
-    "scripts": {
-        "test": "phpunit",
-        "test:unit": "phpunit --testsuite=unit",
-        "test:integration": "phpunit --testsuite=integration"
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
     }
 }
 ```
-
-## Composer Scripts
-
-The framework also includes convenient scripts for common tasks:
-
-```bash
-# Run all tests
-composer test
-
-# Run specific test suites
-composer test:unit         # Unit tests only
-composer test:wp-mock      # WP_Mock tests only
-composer test:integration  # Integration tests only
-
-# Code quality tools
-composer phpcs            # Check code style
-composer phpcbf           # Fix code style issues
-composer analyze          # Run static analysis
 
 # Framework development
 composer sync:wp          # Sync framework to WordPress
@@ -728,28 +789,35 @@ composer sync:wp          # Sync framework to WordPress
 
 These tools and scripts provide a comprehensive testing and quality assurance environment for WordPress plugin development.
 
-## Daily Usage
+## Running Tests
 
-### Verifying Installation
+The primary method for running tests is the `php bin/sync-and-test.php` script, run from your plugin's root directory. This script ensures that your latest code is synchronized with the WordPress test environment before executing the test suite.
 
-To verify that the installation was successful, you can run the test commands defined in the framework:
+### Basic Usage
+
+To run all test suites (unit, integration, and WP_Mock), use the `--all` flag:
 
 ```bash
-# From your plugin directory
-# Run all tests
-composer test
-
-# Run specific test suites
-composer test:unit        # Unit tests only
-composer test:wp-mock     # WP_Mock tests only
-composer test:integration # Integration tests only
+# From your plugin's root directory
+php bin/sync-and-test.php --all
 ```
 
-You can also run PHPUnit directly:
+### Running Specific Test Suites
+
+You can also run specific test suites by providing their names as arguments:
 
 ```bash
-# From your plugin directory
-./vendor/bin/phpunit -c config/phpunit.xml.dist
+# Run only unit tests
+php bin/sync-and-test.php --unit
+
+# Run unit and integration tests
+php bin/sync-and-test.php --unit --integration
+```
+
+For more advanced options and a full list of available flags, run the script with the `--help` flag:
+
+```bash
+php bin/sync-and-test.php --help
 ```
 
 ### Reinstalling or Updating
@@ -791,14 +859,12 @@ cd $WP_PLUGIN_FOLDER
 rm -rf vendor/ composer.lock .phpunit.result.cache
 composer update
 
-# Run tests
-cd $WP_PLUGIN_FOLDER
-composer test
-composer test:unit
-composer test:wp-mock
-composer test:integration
+# For detailed guidance on the correct sequence for updating dependencies,
+# refer to the Composer Update Workflow guide: composer-update-sequence.md
 
-# or
+# Run tests using the sync-and-test.php script
+
+
 cd $DEV_FOLDER
 php bin/sync-and-test.php
 ```

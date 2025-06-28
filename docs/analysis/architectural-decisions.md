@@ -53,6 +53,8 @@ This document captures key architectural decisions made in the PHPUnit Testing F
 **Anti-Pattern**: Using regular expressions to parse wp-config.php.
 
 **Solution**: Direct inclusion of wp-config.php to access defined constants.
+> Important: copy some lines of wp-config.php, not the "Start WordPress" `require_once(ABSPATH . 'wp-settings.php');`
+> see bin/framework-functions.php function get_database_settings()
 
 **Why**: More reliable, matches WordPress's own approach, and avoids regex complexity.
 
@@ -79,3 +81,23 @@ This document captures key architectural decisions made in the PHPUnit Testing F
 **Solution**: Separate configuration loading into helper functions.
 
 **Why**: Improves separation of concerns and makes code more maintainable.
+
+## Dependency Pinning: `10up/wp_mock`
+
+**Decision Date**: 2025-06-26
+
+**Context**:
+The framework has been upgraded to use `phpunit/phpunit: ^11.0`. This created a dependency conflict with our existing WordPress mocking libraries.
+
+**Problem**:
+- The latest version of `10up/wp_mock` (`^1.1`) requires `phpunit/phpunit: ^9.6`.
+- The latest version of `brain/monkey` (`^2.6`) requires `phpunit/phpunit: ^9.0`.
+- Both are incompatible with PHPUnit 11.
+
+**Solution**:
+After investigation, it was discovered that an older version of `10up/wp_mock`, specifically `0.4.2`, has looser dependency constraints (`"phpunit/phpunit": ">=7"`).
+
+We have intentionally pinned `10up/wp_mock` to exactly version `0.4.2` in `composer.json`.
+
+**Why**:
+This is a strategic workaround to resolve the dependency conflict without having to rewrite the entire suite of mock-based tests. It allows us to proceed with PHPUnit 11 while using the existing test structure. This dependency should be re-evaluated if a future version of `10up/wp_mock` or a suitable alternative becomes compatible with PHPUnit 11.

@@ -12,13 +12,13 @@
     ],
     "minimum-stability": "stable",
     "require": {
-        "php": ">=8.1"
+        "php": ">=8.2"
     },
     "require-dev": {
-        "10up/wp_mock": "^0.4",
+        "10up/wp_mock": "0.4.2",
         "brain/monkey": "^2.6",
-        "dealerdirect/phpcodesniffer-composer-installer": "^0.7.0",
-        "friendsofphp/php-cs-fixer": "^3.75",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "friendsofphp/php-cs-fixer": "^3.50",
         "mockery/mockery": "^1.4",
         "phpcompatibility/phpcompatibility-wp": "^2.1",
         "phpstan/phpstan": "^1.10",
@@ -27,7 +27,7 @@
         "squizlabs/php_codesniffer": "^3.6",
         "szepeviktor/phpstan-wordpress": "^1.3",
         "wp-coding-standards/wpcs": "^3.1",
-        "yoast/phpunit-polyfills": "^3.0"
+        "yoast/phpunit-polyfills": "^2.0"
     },
     "autoload": {
         "psr-4": {
@@ -39,14 +39,10 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "WP_PHPUnit_Framework\\Tests\\": "tests/Framework/"
+            "WP_PHPUnit_Framework\\Tests\\Framework\\": "tests/Framework/"
         }
     },
     "scripts": {
-        "test": "composer run-script test:unit && composer run-script test:wp-mock && composer run-script test:integration",
-        "test:unit": "phpunit -c tests/bootstrap/phpunit-unit.xml",
-        "test:wp-mock": "phpunit -c tests/bootstrap/phpunit-wp-mock.xml",
-        "test:integration": "phpunit -c tests/bootstrap/phpunit-integration.xml",
         "test:framework": "phpunit -c tests/bootstrap/phpunit-framework-tests.xml",
         "phpcs": "phpcs",
         "phpcbf": "composer run-script spaces_to_tabs && phpcbf",
@@ -54,10 +50,7 @@
         "fix-style": "phpcbf -p --standard=phpcs.xml",
         "spaces_to_tabs": "find src config tests templates -name \"*.php\" -type f -exec sed -i 's/^    /\\t/g' {} \\;",
         "analyze": "vendor/bin/phpstan analyse --configuration=phpstan.neon",
-        "sync:wp": "php bin/sync-to-wp.php",
-        "wp:test": "SETUP_WP_TESTS=true php bin/sync-to-wp.php",
-        "lando:sync": "lando ssh -c 'mkdir -p /app/wp-content/plugins/gl-phpunit-testing-framework && cd /app && php /app/wp-content/plugins/gl-phpunit-testing-framework/bin/sync-to-wp.php'",
-        "lando:test": "lando ssh -c 'cd /app/wp-content/plugins/gl-phpunit-testing-framework && composer test'"
+        "sync:wp": "php bin/sync-to-wp.php"
     },
     "config": {
         "optimize-autoloader": true,

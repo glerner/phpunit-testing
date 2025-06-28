@@ -317,6 +317,76 @@ function download_wp_tests( string $wp_tests_dir ): bool {
 }
 
 /**
+ * Install PHPUnit Polyfills for WordPress Test Suite only
+ *
+ * This function installs the PHPUnit Polyfills library specifically for the WordPress Test Suite.
+ * The polyfills are NOT used by WP_PHPUnit_Framework or user code, which use PHPUnit 11+.
+ * They are only installed to satisfy WordPress Test Suite requirements for integration tests.
+ *
+ * @param string $wp_tests_dir Directory where tests are installed
+ * @return bool True if successful, false otherwise
+ */
+function install_phpunit_polyfills_for_wp_tests( string $wp_tests_dir ): bool {
+    echo esc_cli("Installing PHPUnit Polyfills for WordPress Test Suite...\n");
+    
+    // Create vendor directory if it doesn't exist
+    $vendor_dir = "$wp_tests_dir/vendor";
+    if (!is_dir($vendor_dir)) {
+        if (!mkdir($vendor_dir, 0755, true)) {
+            echo esc_cli(COLOR_RED . "Error: Failed to create vendor directory: $vendor_dir" . COLOR_RESET . "\n");
+            return false;
+        }
+    }
+    
+    // Define the polyfills directory
+    $polyfills_dir = "$vendor_dir/yoast/phpunit-polyfills";
+    
+    // Check if polyfills are already installed
+    if (is_dir($polyfills_dir) && file_exists("$polyfills_dir/src/TestCases/TestCase.php")) {
+        echo esc_cli("PHPUnit Polyfills already installed.\n");
+        return true;
+    }
+    
+    // Create temporary directory
+    $tmp_dir = "$wp_tests_dir/tmp-polyfills";
+    if (is_dir($tmp_dir)) {
+        system("rm -rf $tmp_dir");
+    }
+    mkdir($tmp_dir, 0755, true);
+    
+    // Clone PHPUnit Polyfills repository
+    $cmd = "git clone --depth=1 --branch=2.0.0 https://github.com/Yoast/PHPUnit-Polyfills.git $tmp_dir";
+    echo esc_cli("Running: $cmd\n");
+    system($cmd, $return_var);
+    
+    if ($return_var !== 0) {
+        echo esc_cli(COLOR_RED . "Error: Failed to clone PHPUnit Polyfills repository." . COLOR_RESET . "\n");
+        system("rm -rf $tmp_dir");
+        return false;
+    }
+    
+    // Create polyfills directory
+    if (!is_dir($polyfills_dir)) {
+        mkdir($polyfills_dir, 0755, true);
+    }
+    
+    // Copy files
+    system("cp -r $tmp_dir/* $polyfills_dir/");
+    
+    // Cleanup
+    system("rm -rf $tmp_dir");
+    
+    // Verify files exist
+    if (!file_exists("$polyfills_dir/src/TestCases/TestCase.php")) {
+        echo esc_cli(COLOR_RED . "Error: Failed to install PHPUnit Polyfills." . COLOR_RESET . "\n");
+        return false;
+    }
+    
+    echo esc_cli(COLOR_GREEN . '✅ PHPUnit Polyfills installed successfully.' . COLOR_RESET . "\n");
+    return true;
+}
+
+/**
  * Generate wp-tests-config.php
  *
  * @param string $wp_tests_dir Directory where tests are installed
@@ -374,6 +444,9 @@ define('WP_TESTS_EMAIL', 'admin@example.org');
 define('WP_TESTS_TITLE', 'Test Blog');
 
 define('WP_PHP_BINARY', 'php');
+
+// Define the path to PHPUnit Polyfills for WordPress Test Suite
+define('WP_TESTS_PHPUNIT_POLYFILLS_PATH', '$wp_tests_dir/vendor/yoast/phpunit-polyfills');
 
 \$table_prefix = 'wptests_';
 EOT;
@@ -830,6 +903,46 @@ if (!check_system_requirements($ssh_command, $wp_db_settings)) {
     exit(1);
 }
 
+// Check PHPUnit version consistency
+echo "Checking PHPUnit version...\n";
+$composer_json_path = PROJECT_DIR . '/composer.json';
+if (file_exists($composer_json_path)) {
+    $composer_config = json_decode(file_get_contents($composer_json_path), true);
+    $required_version_constraint = $composer_config['require-dev']['phpunit/phpunit'] ?? '';
+
+    if (preg_match('/\\^(\\d+)/', $required_version_constraint, $matches)) {
+        $required_major_version = $matches[1];
+
+        // Use `composer show` as it's more reliable in a potentially broken environment, than `vendor/bin/phpunit --version`
+        $composer_command = 'composer show phpunit/phpunit';
+        if (is_lando_environment()) {
+            $composer_command = "lando ssh -c '{$composer_command}' 2>/dev/null";
+        }
+
+        $installed_version_output = shell_exec($composer_command);
+
+        // Parse 'versions' line from composer show output
+        if ($installed_version_output && preg_match('/versions\\s*:\\s*\\*\\s*(\\d+)/', $installed_version_output, $matches)) {
+            $installed_major_version = $matches[1];
+
+            if ($required_major_version !== $installed_major_version) {
+                echo esc_cli(COLOR_RED . 'ERROR: PHPUnit version mismatch.' . COLOR_RESET . "\n");
+                echo "Your composer.json requires PHPUnit version ^" . $required_major_version . ", but version " . $installed_major_version . " is installed in the environment.\n";
+                echo "This can happen after a 'lando rebuild'.\n\n";
+                echo "To fix this, please run the following commands from your project root:\n";
+                echo esc_cli(COLOR_YELLOW . '1. lando ssh -c "composer install"' . COLOR_RESET . "\n");
+                echo esc_cli(COLOR_YELLOW . '2. php bin/setup-plugin-tests.php --remove-all' . COLOR_RESET . "\n");
+                echo esc_cli(COLOR_YELLOW . '3. php bin/setup-plugin-tests.php' . COLOR_RESET . "\n\n");
+                exit(1);
+            } else {
+                 echo esc_cli(COLOR_GREEN . '✅ PHPUnit version ' . $installed_major_version . ' matches composer.json.' . COLOR_RESET . "\n");
+            }
+        } else {
+            echo esc_cli(COLOR_YELLOW . 'Warning: Could not determine installed PHPUnit version via composer. Skipping check.' . COLOR_RESET . "\n");
+        }
+    }
+}
+
 // Set up paths and configuration
 $plugin_dir = PROJECT_DIR;
 
@@ -932,6 +1045,12 @@ if ($remove_all) {
 // Download and set up test suite
 if (!download_wp_tests($wp_tests_dir)) {
     exit(1);
+}
+
+// Install PHPUnit Polyfills for WordPress Test Suite
+if (!install_phpunit_polyfills_for_wp_tests($wp_tests_dir)) {
+    echo esc_cli(COLOR_YELLOW . "Warning: Failed to install PHPUnit Polyfills. Integration tests may not work correctly." . COLOR_RESET . "\n");
+    // Continue anyway as this is not critical for all test types
 }
 
 // Generate config file

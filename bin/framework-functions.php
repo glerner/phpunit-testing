@@ -45,6 +45,10 @@ if (function_exists('WP_PHPUnit_Framework\colored_message')) {
         $first_declared_in = 'unknown location';
     }
 
+    // Log to a predictable file in the temp directory.
+    $log_file = sys_get_temp_dir() . '/phpunit-testing-framework-load.log';
+    echo "temp log $log_file\n";
+
     $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
     $second_request_from = $backtrace[1]['file'] ?? 'unknown file';
 
@@ -55,9 +59,6 @@ if (function_exists('WP_PHPUnit_Framework\colored_message')) {
         $second_request_from
     );
 
-    // Log to a predictable file in the temp directory.
-    $log_file = sys_get_temp_dir() . '/phpunit-testing-framework-load.log';
-    echo "temp log $log_file\n";
     error_log($log_message . "\n", 3, $log_file);
 
     return; // Silently exit to prevent fatal error.
@@ -422,6 +423,8 @@ function get_database_settings(
 /**
  * Displays instructions for running tests via Composer and the sync script.
  *
+ * This should be renamed, since got rid of "composer test:*", only using sync-and-test.php
+ *
  * @since 1.0.0
  *
  * @param bool $is_lando Whether this is a Lando environment.
@@ -434,15 +437,6 @@ function display_composer_test_instructions( bool $is_lando, string $plugin_dir 
 	$cd_command = "cd " . escapeshellarg( $plugin_dir );
 
 	colored_message( "\nTo run the tests, execute these commands from your terminal:", 'yellow' );
-	colored_message( "1. Navigate to your plugin directory:", 'cyan' );
-	colored_message( "   " . $cd_command, 'light_gray' );
-	colored_message( "2. Run the desired test suite:", 'cyan' );
-	colored_message( "   " . $lando_prefix . "composer test:integration  # For integration tests with DB", 'light_gray' );
-	colored_message( "   " . $lando_prefix . "composer test:unit        # For unit tests (no DB)", 'light_gray' );
-	colored_message( "   " . $lando_prefix . "composer test:wp-mock     # For tests using WP_Mock", 'light_gray' );
-	colored_message( "   " . $lando_prefix . "composer test             # To run all test types\n", 'light_gray' );
-
-	colored_message( 'Alternate:', 'yellow' );
     colored_message( "1. Navigate to your plugin directory:", 'cyan' );
     $cd_command = "cd " . escapeshellarg( dirname(__DIR__ ));
 	colored_message( "   $cd_command", 'light_gray' );
@@ -584,6 +578,38 @@ function format_php_command( string $php_script_path, array $arguments = [], str
 	}
 
 	return $command;
+}
+
+/**
+ * Formats a general-purpose Lando exec command for execution.
+ *
+ * This function is for running non-PHP commands like composer, npm, or wp-cli.
+ * It correctly constructs the `lando exec` command with the service name and the '--' separator,
+ * and it safely escapes all arguments.
+ *
+ * @param array  $command_parts An array of the command and its arguments. Can be provided as separate parts
+ *                              (e.g., ['composer', 'install', '--no-dev']) or as a single string
+ *                              (e.g., ['composer install --no-dev']).
+ * @param string $service       The Lando service to run the command on. Defaults to 'appserver'.
+ * @return string The formatted Lando exec command string.
+ */
+function format_lando_exec_command(array $command_parts, string $service = 'appserver'): string
+{
+    // If the command is passed as a single string in the array, split it into parts.
+    if (count($command_parts) === 1
+    && strpos($command_parts[0], ' ') !== false) {
+        $command_parts = explode(' ', $command_parts[0]);
+    }
+
+    // Escape each part of the command to prevent shell injection issues.
+    $escaped_parts = array_map('escapeshellarg', $command_parts);
+
+    $command_string = implode(' ', $escaped_parts);
+
+    // Return the full lando exec command.
+    // Note: The service name is NOT escaped here because it's a controlled value (e.g., 'appserver', 'database')
+    // and not user input. Escaping it would add quotes that break the lando command.
+    return sprintf('lando exec %s -- %s', $service, $command_string);
 }
 
 
@@ -793,6 +819,30 @@ function get_phpunit_database_settings( array $wp_db_settings, ?string $db_name 
 	return $test_db;
 }
 
+
+/**
+ * Output a debug message if verbose/debug mode is enabled
+ *
+ * @param string $message The message to output
+ * @param bool $force_output Whether to force output even if not in verbose mode
+ * @return void
+ */
+function debug_message(string $message, bool $force_output = false): void {
+    static $is_verbose = null;
+
+    $verbosity_flags = ['--verbose', '-v', '-vv', '-vvv', '--debug'];
+
+    // Initialize $is_verbose only once
+    if ($is_verbose === null) {
+        echo "Debug_message: has_cli_flag: ";
+        if (has_cli_flag($verbosity_flags)===true) { echo 'Y'; } else { echo 'N';}
+        echo "\n";
+        $is_verbose = get_setting('VERBOSE', false) || has_cli_flag($verbosity_flags);
+    }
+    if ($is_verbose || $force_output) {
+        echo $message . "\n";
+    }
+}
 
 /**
  * Check if we're in a Lando environment or using Lando commands

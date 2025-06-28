@@ -25,7 +25,9 @@ use function WP_PHPUnit_Framework\load_settings_file;
 use function WP_PHPUnit_Framework\colored_message;
 use function WP_PHPUnit_Framework\display_composer_test_instructions;
 use function WP_PHPUnit_Framework\esc_cli;
+use function WP_PHPUnit_Framework\format_lando_exec_command;
 use function WP_PHPUnit_Framework\get_setting;
+use function WP_PHPUnit_Framework\has_cli_flag;
 use function WP_PHPUnit_Framework\is_lando_environment;
 
 // Global exception handler to catch and display any uncaught exceptions.
@@ -55,6 +57,8 @@ set_exception_handler(
 function main() {
     define('SCRIPT_DIR', __DIR__);
     define('PROJECT_DIR', dirname(__DIR__,1));
+
+colored_message("==== Started sync-to-wp main() =====\n");
 
     // Load settings from environment file
     $env_file = get_setting('ENV_FILE', PROJECT_DIR . '/.env.ini');
@@ -173,16 +177,38 @@ function main() {
         }
     }
 
-    // Copy vendor directory separately to preserve symlinks
-    if (is_dir("$plugin_folder/tests/vendor")) {
-        echo esc_cli("Syncing vendor directory...\n");
-        error_log("Syncing vendor directory... $plugin_folder/tests/vendor/ to $your_plugin_dest/tests/vendor/", 3, '/tmp/phpunit-settings-debug.log');
+    colored_message("==== About to sync vendor directory =====\n");
 
-        $vendor_cmd = "rsync -av --delete --itemize-changes '$plugin_folder/tests/vendor/' '$your_plugin_dest/tests/vendor/'";
+    // Determine the correct vendor directory path using the framework setting
+    $test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
+    $source_vendor_dir = "$plugin_folder/tests/$test_framework_dir/vendor";
+    $dest_vendor_dir = "$your_plugin_dest/tests/$test_framework_dir/vendor";
+
+    // Copy vendor directory separately to preserve symlinks
+    colored_message("Syncing test framework vendor directory to $dest_vendor_dir\n", 'blue');
+
+
+    if (is_dir($source_vendor_dir)) {
+
+        // Ensure the parent directory exists in the destination
+        if (!is_dir(dirname($dest_vendor_dir))) {
+            mkdir(dirname($dest_vendor_dir), 0755, true);
+        }
+
+        $vendor_cmd = "rsync -av --delete --itemize-changes '$source_vendor_dir/' '$dest_vendor_dir/'";
+
+        if (has_cli_flag('verbose')) {
+            colored_message("Executing: $vendor_cmd", 'cyan');
+        }
         passthru($vendor_cmd, $return_var);
+
         if ($return_var !== 0) {
             colored_message("Error syncing vendor directory. rsync exited with code $return_var", 'red');
             exit($return_var);
+        }
+    } else {
+        if (has_cli_flag('verbose')) {
+            colored_message("Test framework vendor directory not found at $source_vendor_dir. Skipping sync.", 'yellow');
         }
     }
 
@@ -190,8 +216,21 @@ function main() {
     if (file_exists($your_plugin_dest . '/composer.json')) {
         $cwd = getcwd();
         chdir($your_plugin_dest);
-        echo esc_cli("Regenerating autoloader files...\n");
-        exec('composer dump-autoload');
+        colored_message("Regenerating autoloader files in: " . getcwd(), 'yellow');
+
+        // Use the dedicated helper function to build the Lando exec command.
+        $command = format_lando_exec_command(['composer install']);
+        echo esc_cli("Executing: $command\n");
+
+        // Execute the command, capturing all output for verification.
+        exec("$command 2>&1", $output, $return_var);
+        echo "\n";
+
+        // Display the results.
+        echo esc_cli(implode("\n", $output));
+        echo "\n";
+
+        echo esc_cli("Command finished with exit code: $return_var\n");
         chdir($cwd);
     }
 

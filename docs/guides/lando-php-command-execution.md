@@ -291,7 +291,9 @@ lando exec appserver -- composer install
 lando exec appserver -- wp plugin list
 ```
 
-### Executing Lando Exec Commands from PHP
+### Executing Lando Exec Commands for PHP Scripts
+
+The `format_php_command()` helper function is the correct way to execute a **PHP script** via `lando exec`. It automatically adds the `php` executable and the `--` separator.
 
 ```php
 // Format the command - each argument as a separate array element
@@ -308,6 +310,36 @@ exec("$command 2>&1", $output, $return_var);
 
 // Note: The command is constructed without the redirection
 // The redirection is added when executing the command
+```
+
+### Executing Lando Exec Commands for Non-PHP Commands
+
+For general-purpose commands like `composer`, `npm`, or `wp-cli`, you should **not** use `format_php_command()`. Instead, use the dedicated `format_lando_exec_command()` helper function.
+
+This function correctly builds the command string, includes the `--` separator, and safely escapes all arguments. The service defaults to `appserver`, and the command can be passed as a single string in an array.
+
+#### Correct Example: Running `composer install`
+
+This example shows the best-practice method for running `composer install` using the helper function.
+
+```php
+// Use the dedicated helper function to build the command.
+// The command can be a single string in an array. The service defaults to 'appserver'.
+$command = format_lando_exec_command(['composer install']);
+
+// To specify a different service, pass it as the second argument:
+// $command = format_lando_exec_command(['npm install'], 'node');
+
+$output = [];
+$return_var = -1;
+
+// Execute the command, redirecting stderr to stdout to capture all output.
+exec("$command 2>&1", $output, $return_var);
+
+// Check the exit code and display output
+echo "Exit Code: $return_var\n";
+echo "Output:\n";
+echo implode("\n", $output);
 ```
 
 ### Key Points for Lando Exec Commands
