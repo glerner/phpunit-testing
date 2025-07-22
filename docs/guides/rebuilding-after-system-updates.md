@@ -52,7 +52,8 @@ sudo systemctl restart docker
 
 After Docker is cleaned up and restarted, follow these steps to properly rebuild your Lando environment without accumulating disk space:
 
-1. First, ensure you're in your project directory and stop any running Lando instances:
+1. First, ensure you're in your Lando project directory (for example, cd ~/sites/wordpress, not your plugin within the WordPress installation) and stop any running Lando instances:
+
 ```bash
 cd /path/to/your/project
 lando poweroff  # or 'lando shutdown' - both work the same way
@@ -75,6 +76,26 @@ lando rebuild -y
 # If rebuild fails, try with a more aggressive cleanup
 lando rebuild --clean -y
 ```
+
+## Make sure WP-CLI is Installed
+
+First, check if WP-CLI is already installed in your Lando container:
+```bash
+lando wp --info
+```
+
+You can install it using Composer (recommended method) or in your .lando.yml:
+
+```bash
+# Install WP-CLI globally in the container
+lando composer global require wp-cli/wp-cli-bundle
+
+# Add WP-CLI to your PATH
+echo 'export PATH="$HOME/.composer/vendor/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+You might want to restore the database here (see below) and then rebuild Composer
 
 4. After successful rebuild, clean up any remaining resources:
 ```bash
@@ -127,14 +148,34 @@ Wait for Lando to complete the startup process. You should see successful connec
 
 ## Install WordPress site data from MySQL file
 
+Before importing the database, you need to create the WordPress database user and grant the necessary privileges:
+
 ```bash
 # Navigate to your WordPress directory
 cd /path/to/wordpress
+# Connect to MySQL as root
+lando mysql
+```
 
-# Install WordPress site data from MySQL file
+### In the MySQL prompt, run these commands:
+
+```sql
+CREATE USER IF NOT EXISTS 'wordpress'@'%' IDENTIFIED BY 'wordpress';
+GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'%';
+GRANT ALL PRIVILEGES ON wordpress_test.* TO 'wordpress'@'%';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### Install WordPress site data from MySQL file
+
+Note: Have available disk space several times the size of the SQL file.
+
+```bash
 lando db-import /app/path/to/wordpress.sql
 # lando db-import /app/lc-database-2025-04-19.sql
-
+# then lando db-export lc-2025-04-19-domain-changed.sql
+lando db-import lc-2025-04-19-domain-changed.sql
 ```
 
 ## Rebuilding Composer Environment

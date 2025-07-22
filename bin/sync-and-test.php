@@ -65,8 +65,6 @@ if (!file_exists($framework_functions)) {
     exit(1);
 }
 
-echo "Framework functions: $framework_functions\n";
-
 require_once $framework_functions;
 
 use function WP_PHPUnit_Framework\load_settings_file;
@@ -283,7 +281,16 @@ if (!file_exists($sync_script)) {
 
 // Execute the sync script - always use filesystem PHP
 colored_message("Executing $sync_script", 'blue');
-$sync_cmd = "php " . escapeshellarg($sync_script);
+
+// Pass critical parameters to sync-to-wp.php via command-line arguments
+$critical_params = [
+    '--filesystem-wp-root=' . escapeshellarg($filesystem_wp_root),
+    '--plugin-slug=' . escapeshellarg($your_plugin_slug),
+    '--folder-in-wordpress=' . escapeshellarg($folder_in_wordpress),
+    '--project-dir=' . escapeshellarg(PROJECT_DIR)
+];
+
+$sync_cmd = "php " . escapeshellarg($sync_script) . " " . implode(" ", $critical_params);
 if ($options['verbose']) {
     echo esc_cli("Command: $sync_cmd\n");
 }
@@ -399,6 +406,17 @@ function build_phpunit_command($test_type, $options, $test_run_path) {
     // Add verbose option if requested
     if ($options['verbose']) {
         $cmd .= ' --testdox';
+        // Note: PHPUnit doesn't support --verbose flag
+    }
+
+    // Add debug option if present
+    if (has_cli_flag(['--debug'])) {
+        $cmd .= ' --debug';
+    }
+
+    // Add coverage option if requested
+    if ($options['coverage']) {
+        $cmd .= ' --coverage-html ' . escapeshellarg($test_run_path . '/build/coverage');
     }
 
     // Add test filter if provided
@@ -449,6 +467,7 @@ function check_phpunit_exists($test_run_path, $your_plugin_dest, $targeting_land
     colored_message('- ' . $docs_path . 'rebuilding-after-system-updates.md', 'cyan');
     exit(1);
 }
+
 // Execute tests based on the selected type
 if ($options['unit']) {
     // Run unit tests

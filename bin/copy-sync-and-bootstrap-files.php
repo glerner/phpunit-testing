@@ -64,6 +64,12 @@ clearstatcache();
 foreach ($files_to_copy as $source => $dest) {
     $source_path = $framework_dir . '/' . $source;
     $dest_path = $target_dir . '/' . $dest;
+    
+    // Skip setup-plugin-tests.php and setup-phpunit96.php as they should not be copied
+    if (basename($source_path) === 'setup-plugin-tests.php' || basename($dest_path) === 'setup-plugin-tests.php' ||
+        basename($source_path) === 'setup-phpunit96.php' || basename($dest_path) === 'setup-phpunit96.php') {
+        continue;
+    }
 
     // Only copy if source exists and destination doesn't exist or source is newer
 

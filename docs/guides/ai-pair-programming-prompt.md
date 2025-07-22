@@ -23,16 +23,18 @@ Every task must follow this exact sequence:
 1.  **Acknowledge & Clarify:** Acknowledge my request. If there is any ambiguity, ask clarifying questions before you proceed.
 2.  **Propose Plan:** After analyzing the request, present a complete, step-by-step plan outlining all the specific actions you will take. The plan should be broken down into small, logical, and reviewable steps.
 3.  **Await Plan Approval:** Stop and wait for me to approve the overall plan before you take any action.
-4.  **Execute One Step:** Propose the **first** small, focused change from the approved plan.
+4.  **Execute One Step:** Propose **one** small, focused change from the approved plan.
 5.  **Await Change Approval:** Stop and wait for me to review and accept the specific code change.
-6.  **Confirm & Continue:** Once the change is applied, provide a brief confirmation (e.g., "The change has been applied."). Proceed to the next step in your approved plan, repeating from step 4.
+6.  **Any Changes:** If I have changes to your edits, make them, one change item at a time.
+7.  **Continue:** Once the change is approved, proceed to the next step in your approved plan, repeating from step 4.
 7.  **Report Completion:** Once all steps in the plan are complete, state: "**Task complete. Awaiting your next instruction.**"
 
 ## 4. Communication Style: Clarity and Brevity
 
 -   **Be Succinct:** Give me only the final, concise result of your thinking. Do not show me multiple versions of your plan or a verbose stream of consciousness.
--   **State Your Action Clearly:** Your action plan should be a single, clear sentence.
+-   **State Your Action Clearly:** Your action plan should be single, clear sentences.
 -   **No Idle Chatter:** Do not add conversational filler. Focus on the task.
+-   **No Code Blockes:** Never show me code blocks in the Cascade window; they are too hard for me to read (narrow panel, tiny font). When I approve code changes, make them directly in the Editor panel (which has green/red Diff highlighting). Exception: when I ask for bug reports or Git commit messages.
 
 ## 5. Project-Specific Context & Coding Style
 
@@ -42,12 +44,23 @@ Every task must follow this exact sequence:
 -   **Code Inventories are Law:** The [Reinvent code-inventory.md](../../../reinvent/docs/guides/code-inventory.md) file in each project is the definitive guide. All functions, their signatures, and their purposes must be respected as documented.
 -   **Document with Precision:** Keep the [Reinvent code-inventory.md](../../../reinvent/docs/guides/code-inventory.md) succinct. However, do suggest adding clarifying notes where context is critical (e.g., "This Lando command must be run inside the container").
 -   **Handling Discrepancies:** If you find a discrepancy between the code and [Reinvent code-inventory.md](../../../reinvent/docs/guides/code-inventory.md), you must ask me for guidance before proceeding. Assume the documentation is the intended state, but always confirm.
+-   **Named Parameters:**  PHP 8+ supports calling functions with named parameters even if they weren't defined that way. Use them for clarity. No 'mystery parameters' or high chance of using wrong parameter order.
 -   **Error Handling:**
     -   For terminal programs (in `bin/`), use the [colored_message()](../../bin/framework-functions.php) function for user feedback and errors.
     -   For the WordPress plugin code, use the WordPress API for showing messages.
 -   **Precise Edits:** Use `replace_file_content` for targeted, precise edits. Avoid large, sweeping changes that are difficult to review.
--   **Documentation is Code:** Treat the Markdown documentation files with the same precision and care as the PHP code.
--   **Use Generic Placeholders:** When writing documentation or examples, use generic placeholders like `YOUR_PROJECT_NAME` or `/path/to/your/project` instead of my specific project names and folder paths.
+-   **Documentation Guidelines:**
+    - **Code Inventory Format:**
+      - Be concise and technically precise
+      - Focus on function signatures, parameters, and return types
+      - Use consistent formatting with clear section headers and code blocks
+      - Avoid redundant explanations and usage notes
+    - **Change Process:**
+      - One small change at a time
+      - Provide a brief summary for approval, and wait.
+      - Make the change, and *wait*.
+    - **Documentation is Code:** Treat Markdown files with the same precision as PHP code
+    - **Use Generic Placeholders:** Use placeholders like `YOUR_PROJECT_NAME` or `/path/to/your/project` instead of specific names
 
 ## 6. Architecture: Model-Service-View-Controller (MSVC)
 

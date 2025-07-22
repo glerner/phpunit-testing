@@ -205,7 +205,8 @@ function check_system_requirements(string $ssh_command, array $db_settings): boo
     $all_ok = true;
 
     // 1. Check for Git
-    exec('git --version', $git_output, $git_return_code);
+    $git_return_code = '';
+    passthru('git --version', $git_return_code);
     if ($git_return_code !== 0) {
         echo esc_cli(COLOR_RED . '❌ Git is not installed or not in PATH.' . COLOR_RESET . "\n");
         $all_ok = false;
@@ -225,11 +226,12 @@ function check_system_requirements(string $ssh_command, array $db_settings): boo
 
     // 3. Check MySQL connection
     $mysql_check_cmd = format_mysql_execution($ssh_command, $db_settings['db_host'], $db_settings['db_user'], $db_settings['db_pass'], 'SELECT 1');
-    exec($mysql_check_cmd, $mysql_output, $mysql_return_code);
+    $mysql_return_code = '';
+    passthru($mysql_check_cmd, $mysql_return_code);
 
     if ($mysql_return_code !== 0) {
         echo esc_cli(COLOR_RED . '❌ MySQL connection failed. Please check your database credentials and that the server is running.' . COLOR_RESET . "\n");
-        echo esc_cli('Error details: ' . implode("\n", $mysql_output) . "\n");
+        echo "Output: $return_var\n";
         $all_ok = false;
     } else {
         echo esc_cli(COLOR_GREEN . '✅ MySQL connection successful.' . COLOR_RESET . "\n");
@@ -328,7 +330,7 @@ function download_wp_tests( string $wp_tests_dir ): bool {
  */
 function install_phpunit_polyfills_for_wp_tests( string $wp_tests_dir ): bool {
     echo esc_cli("Installing PHPUnit Polyfills for WordPress Test Suite...\n");
-    
+
     // Create vendor directory if it doesn't exist
     $vendor_dir = "$wp_tests_dir/vendor";
     if (!is_dir($vendor_dir)) {
@@ -337,51 +339,52 @@ function install_phpunit_polyfills_for_wp_tests( string $wp_tests_dir ): bool {
             return false;
         }
     }
-    
+
     // Define the polyfills directory
     $polyfills_dir = "$vendor_dir/yoast/phpunit-polyfills";
-    
+
     // Check if polyfills are already installed
-    if (is_dir($polyfills_dir) && file_exists("$polyfills_dir/src/TestCases/TestCase.php")) {
+    // (probably older version) if (is_dir($polyfills_dir) && file_exists("$polyfills_dir/src/TestCases/TestCase.php")) {
+    if (is_dir($polyfills_dir) && file_exists("$polyfills_dir/phpunitpolyfills-autoload.php")) {
         echo esc_cli("PHPUnit Polyfills already installed.\n");
         return true;
     }
-    
+
     // Create temporary directory
     $tmp_dir = "$wp_tests_dir/tmp-polyfills";
     if (is_dir($tmp_dir)) {
         system("rm -rf $tmp_dir");
     }
     mkdir($tmp_dir, 0755, true);
-    
+
     // Clone PHPUnit Polyfills repository
     $cmd = "git clone --depth=1 --branch=2.0.0 https://github.com/Yoast/PHPUnit-Polyfills.git $tmp_dir";
     echo esc_cli("Running: $cmd\n");
     system($cmd, $return_var);
-    
+
     if ($return_var !== 0) {
         echo esc_cli(COLOR_RED . "Error: Failed to clone PHPUnit Polyfills repository." . COLOR_RESET . "\n");
         system("rm -rf $tmp_dir");
         return false;
     }
-    
+
     // Create polyfills directory
     if (!is_dir($polyfills_dir)) {
         mkdir($polyfills_dir, 0755, true);
     }
-    
+
     // Copy files
     system("cp -r $tmp_dir/* $polyfills_dir/");
-    
+
     // Cleanup
     system("rm -rf $tmp_dir");
-    
+
     // Verify files exist
-    if (!file_exists("$polyfills_dir/src/TestCases/TestCase.php")) {
+    if (!file_exists("$polyfills_dir/phpunitpolyfills-autoload.php")) {
         echo esc_cli(COLOR_RED . "Error: Failed to install PHPUnit Polyfills." . COLOR_RESET . "\n");
         return false;
     }
-    
+
     echo esc_cli(COLOR_GREEN . '✅ PHPUnit Polyfills installed successfully.' . COLOR_RESET . "\n");
     return true;
 }
@@ -389,13 +392,15 @@ function install_phpunit_polyfills_for_wp_tests( string $wp_tests_dir ): bool {
 /**
  * Generate wp-tests-config.php
  *
- * @param string $wp_tests_dir Directory where tests are installed
- * @param string $wp_root WordPress root directory
+ * @param string $wp_tests_dir Directory where tests are installed (filesystem path)
+ * @param string $wp_root WordPress root directory (container path)
  * @param string $db_name Database name
  * @param string $db_user Database user
  * @param string $db_pass Database password
  * @param string $db_host Database host
  * @param string $plugin_dir Plugin directory
+ * @param string $wp_tests_dir_container Container path to tests directory (default: empty, will use wp_tests_dir)
+ * @param string $filesystem_wp_root Filesystem path to WordPress root (default: empty, will use wp_root)
  * @return bool True if successful, false otherwise
  */
 function generate_wp_tests_config(
@@ -405,9 +410,28 @@ function generate_wp_tests_config(
     string $db_user,
     string $db_pass,
     string $db_host,
-    string $plugin_dir
+    string $plugin_dir,
+    string $wp_tests_dir_container = '',
+    string $filesystem_wp_root = ''
 ): bool {
+
+    global $plugin_slug;
+
     echo "Generating wp-tests-config.php...\n";
+
+    // Calculate the polyfills path outside the heredoc
+    $polyfills_path = !empty($wp_tests_dir_container) ? "$wp_tests_dir_container/vendor/yoast/phpunit-polyfills" : "$wp_tests_dir/vendor/yoast/phpunit-polyfills";
+
+    // Calculate the PHPUnit 9.6 path for WordPress Test Suite
+    // Determine the framework directory based on installation method (Composer or Git Submodule)
+    $project_root = "$wp_root/wp-content/plugins/$plugin_slug";
+    $framework_dir = is_dir("$project_root/vendor/glerner/phpunit-testing")
+        ? "$project_root/vendor/glerner/phpunit-testing"
+        : "$project_root/tests/gl-phpunit-test-framework";
+
+    // Use the framework directory to construct the PHPUnit 9.6 path
+    $phpunit96_path = "$framework_dir/phpunit96/vendor/bin/phpunit";
+    echo "Using PHPUnit 9.6 path: $phpunit96_path\n";
 
     $config_content = <<<EOT
 <?php
@@ -446,7 +470,10 @@ define('WP_TESTS_TITLE', 'Test Blog');
 define('WP_PHP_BINARY', 'php');
 
 // Define the path to PHPUnit Polyfills for WordPress Test Suite
-define('WP_TESTS_PHPUNIT_POLYFILLS_PATH', '$wp_tests_dir/vendor/yoast/phpunit-polyfills');
+define('WP_TESTS_PHPUNIT_POLYFILLS_PATH', '$polyfills_path');
+
+// Define the path to PHPUnit 9.6 for WordPress Test Suite
+define('WP_TESTS_PHPUNIT_PATH', '$phpunit96_path');
 
 \$table_prefix = 'wptests_';
 EOT;
@@ -463,20 +490,6 @@ EOT;
     // Create tests directory if it doesn't exist
     if (!is_dir($tests_dir)) {
         mkdir($tests_dir, 0755, true);
-    }
-
-    // Remove existing symlink if it exists
-    if (file_exists("$tests_dir/wp-tests-config.php")) {
-        unlink("$tests_dir/wp-tests-config.php");
-    }
-
-    // Instead of a symlink, copy the file directly
-    // This is more reliable, especially in containerized environments
-    if (copy("$wp_tests_dir/wp-tests-config.php", "$tests_dir/wp-tests-config.php")) {
-        echo COLOR_GREEN . '✅ Copied wp-tests-config.php to tests directory' . COLOR_RESET . "\n";
-    } else {
-        echo "Warning: Failed to copy wp-tests-config.php. You may need to copy the file manually.\n";
-        // Continue anyway, this is not critical
     }
 
     echo COLOR_GREEN . '✅ wp-tests-config.php generated successfully.' . COLOR_RESET . "\n";
@@ -501,7 +514,8 @@ function install_test_suite(
     string $db_host
 ): bool {
     // Check if mysql command is available
-    exec('which mysql', $output, $return_var);
+    $return_var = '';
+    passthru('which mysql', $return_var);
     if ($return_var !== 0) {
         echo "Error: The mysql command-line client is not installed or not in PATH.\n";
         echo "Please install it with: sudo apt-get install mysql-client\n";
@@ -549,11 +563,12 @@ function install_test_suite(
 
     echo "Debug: Executing command: $cmd\n";
     // Add shell redirection (2>&1) to capture both standard output and error streams
-    exec("$cmd 2>&1", $output, $return_var);
+    $output = [];
+    passthru($cmd . ' 2>&1', $return_var);
 
     if ($return_var !== 0) {
         echo "Error: Cannot connect to MySQL server.\n";
-        echo 'Output: ' . implode("\n", $output) . "\n";
+        echo "Output: $return_var\n";
         return false;
     }
 
@@ -576,11 +591,11 @@ function install_test_suite(
 
     echo "Debug: Executing command: $cmd\n";
     // Add shell redirection (2>&1) to capture both standard output and error streams
-    exec("$cmd 2>&1", $output, $return_var);
+    passthru($cmd . ' 2>&1', $return_var);
 
     if ($return_var !== 0) {
         echo "Warning: Failed to drop test database.\n";
-        echo 'Output: ' . implode("\n", $output) . "\n";
+        echo "Output: $return_var\n";
         echo "Continuing anyway, as the database might not exist yet...\n";
     } else {
         echo COLOR_GREEN . '✅ Existing database dropped (if it existed)' . COLOR_RESET . "\n";
@@ -608,15 +623,19 @@ DB_SETUP;
     }
 
     // format and execute the MySQL command
-    $cmd = format_mysql_execution($ssh_command, $db_host, 'root', '', $sql_command);
+    // function format_mysql_execution( string $ssh_command, string $host, string $user, string $pass, string $sql, ?string $db = null ): string {
 
-    echo "Debug: Executing command: $cmd\n";
+    // Omitting the $db argument ensures the mysql client connects to the server and runs the SQL statement at the top level, which is correct for CREATE DATABASE.
+    $cmd = format_mysql_execution($ssh_command, '', 'root', '', $sql_command);
+
+    echo "Debug: Creating wordpress_test database: $cmd\n";
     // Add shell redirection (2>&1) to capture both standard output and error streams
-    exec("$cmd 2>&1", $output, $return_var);
+    passthru($cmd . ' 2>&1', $return_var);
+    echo "Return: $return_var\n";
 
     if ($return_var !== 0) {
         echo "Error: Failed to create test database.\n";
-        echo 'Output: ' . implode("\n", $output) . "\n";
+        echo "Output: $output\n";
         echo "\nDebug: Full SQL command:\n$sql_command\n";
         echo "\nDebug: Try running this command manually to see the error:\n";
         echo "$cmd\n";
@@ -631,11 +650,11 @@ DB_SETUP;
 
     echo "Debug: Executing command: $cmd\n";
     // Add shell redirection (2>&1) to capture both standard output and error streams
-    exec("$cmd 2>&1", $output, $return_var);
+    passthru($cmd . ' 2>&1', $return_var);
 
     if ($return_var !== 0) {
         echo "Error: Cannot access test database after creation.\n";
-        echo 'Output: ' . implode("\n", $output) . "\n";
+        echo "Output: $return_var\n";
         return false;
     }
 
@@ -699,6 +718,9 @@ EOT;
     $php_command = 'php';
     $install_path = "$wp_tests_dir/includes/install.php";
     $config_path = "$wp_tests_dir/wp-tests-config.php";
+    // Store original directory for later restoration
+    $original_dir = getcwd();
+
 
     if ($targeting_lando) {
         echo "Debug: Using Lando PHP for installation...\n";
@@ -713,31 +735,42 @@ EOT;
 
     // Capture output for debugging
     $output = array();
+    // Store original directory for later restoration
+    $original_dir = getcwd();
+
+
+    // Get the filesystem WordPress root path
+    // $path = make_path($wp_root, $folder_in_wordpress, $your_plugin_slug, 'tests');
+
+    $plugin_slug =
+    $yourplugin_dir = make_path(get_setting('FILESYSTEM_WP_ROOT'), get_setting('FOLDER_IN_WORDPRESS'), get_setting('YOUR_PLUGIN_SLUG') );
+    chdir($yourplugin_dir);
 
     // For Lando PHP commands, we need to be careful with quotes and paths
     if ($targeting_lando) {
-        // Use lando php directly, which *only* works from *outside* the container
-        echo "Using lando php to execute the installation script...\n";
-        $command = "lando php \"/app/wp-content/plugins/wordpress-develop/tests/phpunit/includes/install.php\" \"/app/wp-content/plugins/wordpress-develop/tests/phpunit/wp-tests-config.php\"";
+        $command = format_php_command($install_path, array($config_path), 'lando_exec');
     } else {
-        $command = format_php_command($install_path, array( $config_path ), $php_command);
+        $command = format_php_command($install_path, array($config_path), 'direct');
     }
 
-    echo "Debug: PHP command to execute: $command\n";
+    echo "Debug: Install Path: $install_path
+    Config path: $config_path
+    PHP command to execute: $command
+    From cwd: $yourplugin_dir";
 
     // Add shell redirection (2>&1) to capture both standard output and error streams
     // See docs/guides/lando-php-command-execution.md for details on proper command execution with redirection
-    exec("$command 2>&1", $output, $return_var);
+    passthru($command . ' 2>&1', $return_var);
 
     // Check for common Lando errors
     if ($return_var !== 0) {
-        $output_str = implode("\n", $output);
-        echo COLOR_RED . "Command output:\n" . COLOR_RESET . $output_str . "\n";
+        echo COLOR_RED . "Output: $return_var\n" . COLOR_RESET;
 
-        if ($targeting_lando && strpos($output_str, 'Usage:') !== false && strpos($output_str, 'lando <command>') !== false) {
+        if ($targeting_lando && strpos($command, 'lando <command>') !== false) {
             echo COLOR_RED . "Error: Lando command failed. Make sure Lando is running with 'lando start'" . COLOR_RESET . "\n";
         }
     }
+    chdir($original_dir);
 
     // Install compatibility files for modern WordPress
     echo "Installing compatibility files for modern WordPress...\n";
@@ -745,12 +778,10 @@ EOT;
     // Get the path to the compatibility files
     $compat_dir = dirname(__DIR__) . '/compat';
 
-    // Get the filesystem WordPress root path
-    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
 
     // Check if WordPress version requires compatibility files
     // Modern WordPress (6.x+) uses namespaced PHPMailer but the test suite expects the old structure
-    $wp_includes_dir = "$filesystem_wp_root/wp-includes";
+    $wp_includes_dir = get_setting('FILESYSTEM_WP_ROOT') . "/wp-includes";
 
     // Check if class-wp-phpmailer.php exists, if not, copy our compatibility version
     if (!file_exists("$wp_includes_dir/class-wp-phpmailer.php") && file_exists("$compat_dir/wp-includes/class-wp-phpmailer.php")) {
@@ -809,11 +840,12 @@ DROP_DB;
 
     echo "Debug: Executing command: $cmd\n";
     // Add shell redirection (2>&1) to capture both standard output and error streams
-    exec("$cmd 2>&1", $output, $return_var);
+    $return_var = [];
+    passthru($cmd . ' 2>&1', $return_var);
 
     if ($return_var !== 0) {
         echo "Error: Failed to drop test database.\n";
-        echo 'Output: ' . implode("\n", $output) . "\n";
+        echo "Output: $return_var\n";
         // Continue anyway to remove files
     } else {
         echo COLOR_GREEN . '✅ Database dropped successfully' . COLOR_RESET . "\n";
@@ -903,46 +935,6 @@ if (!check_system_requirements($ssh_command, $wp_db_settings)) {
     exit(1);
 }
 
-// Check PHPUnit version consistency
-echo "Checking PHPUnit version...\n";
-$composer_json_path = PROJECT_DIR . '/composer.json';
-if (file_exists($composer_json_path)) {
-    $composer_config = json_decode(file_get_contents($composer_json_path), true);
-    $required_version_constraint = $composer_config['require-dev']['phpunit/phpunit'] ?? '';
-
-    if (preg_match('/\\^(\\d+)/', $required_version_constraint, $matches)) {
-        $required_major_version = $matches[1];
-
-        // Use `composer show` as it's more reliable in a potentially broken environment, than `vendor/bin/phpunit --version`
-        $composer_command = 'composer show phpunit/phpunit';
-        if (is_lando_environment()) {
-            $composer_command = "lando ssh -c '{$composer_command}' 2>/dev/null";
-        }
-
-        $installed_version_output = shell_exec($composer_command);
-
-        // Parse 'versions' line from composer show output
-        if ($installed_version_output && preg_match('/versions\\s*:\\s*\\*\\s*(\\d+)/', $installed_version_output, $matches)) {
-            $installed_major_version = $matches[1];
-
-            if ($required_major_version !== $installed_major_version) {
-                echo esc_cli(COLOR_RED . 'ERROR: PHPUnit version mismatch.' . COLOR_RESET . "\n");
-                echo "Your composer.json requires PHPUnit version ^" . $required_major_version . ", but version " . $installed_major_version . " is installed in the environment.\n";
-                echo "This can happen after a 'lando rebuild'.\n\n";
-                echo "To fix this, please run the following commands from your project root:\n";
-                echo esc_cli(COLOR_YELLOW . '1. lando ssh -c "composer install"' . COLOR_RESET . "\n");
-                echo esc_cli(COLOR_YELLOW . '2. php bin/setup-plugin-tests.php --remove-all' . COLOR_RESET . "\n");
-                echo esc_cli(COLOR_YELLOW . '3. php bin/setup-plugin-tests.php' . COLOR_RESET . "\n\n");
-                exit(1);
-            } else {
-                 echo esc_cli(COLOR_GREEN . '✅ PHPUnit version ' . $installed_major_version . ' matches composer.json.' . COLOR_RESET . "\n");
-            }
-        } else {
-            echo esc_cli(COLOR_YELLOW . 'Warning: Could not determine installed PHPUnit version via composer. Skipping check.' . COLOR_RESET . "\n");
-        }
-    }
-}
-
 // Set up paths and configuration
 $plugin_dir = PROJECT_DIR;
 
@@ -1029,12 +1021,12 @@ $wp_tests_dir = get_setting('WP_TESTS_DIR', "$filesystem_wp_root/wp-content/plug
     '/wordpress-develop/tests/phpunit',
 */
 
-echo "Using WordPress test directory: $wp_tests_dir\n";
+echo "Using WordPress Test Suite directory: $wp_tests_dir\n";
 
 // If --remove-all flag is set, remove test suite and exit
 if ($remove_all) {
     if (remove_test_suite($wp_tests_dir, $db_name, $db_host, $ssh_command)) {
-        echo "\n" . COLOR_GREEN . '✅ WordPress test suite successfully removed!' . COLOR_RESET . "\n";
+        echo "\n" . COLOR_GREEN . '✅ WordPress Test Suite successfully removed!' . COLOR_RESET . "\n";
         exit(0);
     } else {
         echo "\n" . COLOR_RED . '❌ Failed to completely remove WordPress test suite.' . COLOR_RESET . "\n";
@@ -1053,8 +1045,42 @@ if (!install_phpunit_polyfills_for_wp_tests($wp_tests_dir)) {
     // Continue anyway as this is not critical for all test types
 }
 
+// Install PHPUnit 9.6 for WordPress Test Suite
+echo "Installing PHPUnit 9.6 for WordPress Test Suite integration tests...\n";
+$setup_phpunit96_path = __DIR__ . '/setup-phpunit96.php';
+if (file_exists($setup_phpunit96_path)) {
+    // Ensure global variables are available to setup-phpunit96.php
+    global $wp_root, $plugin_dir, $plugin_slug, $ssh_command;
+
+    // Include the setup script
+    include_once $setup_phpunit96_path;
+    echo esc_cli(COLOR_GREEN . "✅ PHPUnit 9.6 installed successfully for WordPress Test Suite integration tests." . COLOR_RESET . "\n");
+} else {
+    echo esc_cli(COLOR_YELLOW . "Warning: Could not find setup-phpunit96.php. Integration tests may use system PHPUnit version." . COLOR_RESET . "\n");
+    // Continue anyway as this is not critical for all test types
+}
+
 // Generate config file
-if (!generate_wp_tests_config($wp_tests_dir, $wp_root, $db_name, $db_user, $db_pass, $db_host, $plugin_dir)) {
+// Construct container path for WordPress test suite
+$wp_tests_dir_container = '';
+if ($wp_root !== $filesystem_wp_root) {
+    // If we're in a container environment, construct the container path
+    $wp_tests_dir_container = str_replace($filesystem_wp_root, $wp_root, $wp_tests_dir);
+    echo "Using container path for WordPress test suite: $wp_tests_dir_container\n";
+}
+
+// Generate wp-tests-config.php
+if (!generate_wp_tests_config(
+    $wp_tests_dir,
+    $wp_root,
+    $db_name,
+    $db_user,
+    $db_pass,
+    $db_host,
+    $plugin_dir,
+    $wp_tests_dir_container,
+    $filesystem_wp_root
+)) {
     exit(1);
 }
 
@@ -1074,7 +1100,7 @@ if (!install_test_suite($wp_tests_dir, $db_name, $db_user, $db_pass, $db_host)) 
 }
 
 // Handle permissions for Lando
-$lando_path = exec('which lando');
+$lando_path = passthru('which lando', $return_var);
 if (!empty($lando_path)) {
     echo "Setting permissions using Lando...\n";
     system("lando ssh -c 'chown -R www-data:www-data /app/wp-content/plugins/$plugin_slug'");

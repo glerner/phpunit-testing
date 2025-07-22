@@ -513,3 +513,23 @@ This guide has covered the best practices for executing commands in Lando enviro
 3. **Lando MySQL Commands**: Use the appropriate command type and escaping rules
 
 By following these guidelines, you can ensure reliable execution of commands in Lando environments with proper error handling and output capture.
+
+## Tools for Debugging
+
+### Are you running in Lando
+
+```bash
+lando php -r 'echo getenv("LANDO") === "ON" ? "Running in Lando\n" : "Not running in Lando\n";'
+```
+
+### check the installed PHP modules to see if MySQLi is available:
+
+```bash
+lando php -m | grep -i mysql
+```
+
+### verify the PHP configuration to confirm that the MySQLi extension is properly loaded
+
+```bash
+lando php -i | grep -A 10 "mysqli"
+```

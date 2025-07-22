@@ -60,26 +60,37 @@ function main() {
 
 colored_message("==== Started sync-to-wp main() =====\n");
 
+    // Parse command line arguments
+    $options = getopt('', [
+        'filesystem-wp-root:',
+        'plugin-slug:',
+        'folder-in-wordpress:',
+        'project-dir:',
+    ]);
+
     // Load settings from environment file
     $env_file = get_setting('ENV_FILE', PROJECT_DIR . '/.env.ini');
     global $loaded_settings;
     $loaded_settings = load_settings_file($env_file);
 
-    // Define paths from settings
-    $plugin_folder = get_setting('PLUGIN_FOLDER', PROJECT_DIR);
+    // Define paths from settings, prioritizing command-line arguments
+    $project_dir = $options['project-dir'] ?? PROJECT_DIR;
+    $plugin_folder = get_setting('PLUGIN_FOLDER', $project_dir);
 
-    // FILESYSTEM_WP_ROOT is required - no default fallback
-    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT');
+    // FILESYSTEM_WP_ROOT is required - check command-line first, then settings
+    $filesystem_wp_root = $options['filesystem-wp-root'] ?? get_setting('FILESYSTEM_WP_ROOT');
     if (empty($filesystem_wp_root)) {
         echo esc_cli("Error: FILESYSTEM_WP_ROOT setting is not set.\n");
         echo esc_cli("Please set this in your .env.testing file or environment.\n");
         exit(1);
     }
 
-    // Get plugin slug and folder path from settings
-    $your_plugin_slug = get_setting('YOUR_PLUGIN_SLUG', 'my-wordpress-plugin');
-    $folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+    // Get plugin slug and folder path from command-line or settings
+    $your_plugin_slug = $options['plugin-slug'] ?? get_setting('YOUR_PLUGIN_SLUG', 'my-wordpress-plugin');
+    $folder_in_wordpress = $options['folder-in-wordpress'] ?? get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
     $your_plugin_dest = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $your_plugin_slug;
+    
+    colored_message("Using parameters from command-line and/or settings file", 'blue');
 
     echo esc_cli("Using paths:\n");
     echo esc_cli("  Plugin Folder: $plugin_folder\n");
@@ -234,8 +245,9 @@ colored_message("==== Started sync-to-wp main() =====\n");
         chdir($cwd);
     }
 
-    // Note: For setting up the WordPress test environment, use the setup-plugin-tests.php script
-    // Example: php bin/setup-plugin-tests.php
+    // Note: For setting up the WordPress test environment, use the setup-plugin-tests.php script from the framework, do *not* copy to bin
+    // Example: php tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php
+
 
     // Return to framework destination directory
     echo esc_cli("Plugin files synced to: $your_plugin_dest\n");

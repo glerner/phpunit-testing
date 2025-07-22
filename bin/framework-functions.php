@@ -47,7 +47,8 @@ if (function_exists('WP_PHPUnit_Framework\colored_message')) {
 
     // Log to a predictable file in the temp directory.
     $log_file = sys_get_temp_dir() . '/phpunit-testing-framework-load.log';
-    echo "temp log $log_file\n";
+
+    echo "Framework Functions: " . __FILE__ . " \ntemp log $log_file\n";
 
     $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
     $second_request_from = $backtrace[1]['file'] ?? 'unknown file';
@@ -118,16 +119,37 @@ set_exception_handler(
  * @return mixed Setting value
  */
 function get_setting( string $name, mixed $default = null ): mixed {
+    // Create a debug log file for tracking get_setting calls
+    $debug_log_file = '/tmp/phpunit-get-setting-debug.log';
+
+    // Get caller information
+    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+    $caller = $backtrace[0];
+    $caller_function = isset($backtrace[1]['function']) ? $backtrace[1]['function'] : 'unknown';
+    $caller_class = isset($backtrace[1]['class']) ? $backtrace[1]['class'] : 'none';
+
+    // Log the call
+    $log_prefix = date('Y-m-d H:i:s') . " | " . getmypid() . " | ";
+    error_log($log_prefix . "CALL: get_setting('$name') from " . $caller['file'] . ":" . $caller['line'] . " in $caller_class::$caller_function\n", 3, $debug_log_file);
+
+    // Log the state of $loaded_settings
+    global $loaded_settings;
+    $settings_count = isset($loaded_settings) ? count($loaded_settings) : 0;
+    $settings_status = isset($loaded_settings) ? "SET ($settings_count items)" : "NOT SET";
+    error_log($log_prefix . "STATE: \$loaded_settings is $settings_status\n", 3, $debug_log_file);
+
     // Check environment variables first (highest priority)
     $env_value = getenv($name);
     if ($env_value !== false) {
+        error_log($log_prefix . "RESULT: Found '$name' in environment variables, value: '$env_value'\n", 3, $debug_log_file);
         return $env_value;
     }
 
     // Check our loaded settings (already loaded from .env.testing)
-    global $loaded_settings;
     if (isset($loaded_settings[ $name ])) {
-        return $loaded_settings[ $name ];
+        $value = $loaded_settings[ $name ];
+        error_log($log_prefix . "RESULT: Found '$name' in \$loaded_settings, value: '$value'\n", 3, $debug_log_file);
+        return $value;
     }
 
     /* Don't recursively set, if there is an error
@@ -140,13 +162,16 @@ function get_setting( string $name, mixed $default = null ): mixed {
     // Silently log critical setting issues to error log without screen output
     if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
         if (empty($loaded_settings)) {
-            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'] . "\n\n", 3, $error_log_file);
+            error_log("Warning: \$loaded_settings is empty when requesting '$name' in " . $caller['file'] . ":" . $caller['line'] . "\n\n", 3, $error_log_file);
+            error_log($log_prefix . "WARNING: \$loaded_settings is empty when requesting critical setting '$name'\n", 3, $debug_log_file);
         } else if (!isset($loaded_settings[$name])) {
-            error_log("Warning: '$name' not found in \$loaded_settings in " . debug_backtrace()[0]['file'] . ":" . debug_backtrace()[0]['line'] . "\n\n", 3, $error_log_file);
+            error_log("Warning: '$name' not found in \$loaded_settings in " . $caller['file'] . ":" . $caller['line'] . "\n\n", 3, $error_log_file);
+            error_log($log_prefix . "WARNING: Critical setting '$name' not found in \$loaded_settings\n", 3, $debug_log_file);
         }
     }
 
     // Return default if not found
+    error_log($log_prefix . "RESULT: '$name' not found, returning default value\n", 3, $debug_log_file);
     return $default;
 }
 
@@ -247,7 +272,7 @@ function find_project_root(string $start_dir, string $marker = 'composer.json'):
  *
  * @param string $wp_config_path Path to WordPress configuration file
  * @param array  $lando_info Lando environment configuration, obtained by executing 'lando info' command
- * @param string $config_file_name Name of the configuration file (default: '.env.testing')
+ * @paramls string $config_file_name Name of the configuration file (default: '.env.testing')
  * @return array Database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
  * @throws \Exception If wp-config.php doesn't exist or if any required database settings are missing.
  */
@@ -473,7 +498,10 @@ function format_ssh_command( string $ssh_command, string $command ): string {
         // echo esc_cli("Debug: Using regular SSH format\n");
     }
 
-    colored_message("Debug: Final SSH command: $result", 'blue');
+    // Show debug output only when --debug flag is set
+    if (has_cli_flag(['--debug'])) {
+        colored_message("Debug: Final SSH command: $result", 'blue');
+    }
     return $result;
 }
 
@@ -555,9 +583,24 @@ function format_php_command( string $php_script_path, array $arguments = [], str
 
 	// Format the command based on type
 	if ( 'lando_php' === $command_type ) {
-		$command = 'lando php "' . $php_script_path . '"';
+        // Per Lando best practices, use lando exec appserver -- php for all Lando PHP execution
+        $base_command = 'lando exec appserver -- php';
+        $args = array_merge([$php_script_path], $arguments);
+        $command = $base_command;
+        foreach ($args as $arg) {
+            $escaped_arg = str_replace('"', '\"', $arg);
+            $command .= ' "' . $escaped_arg . '"';
+        }
 	} elseif ( 'lando_exec' === $command_type ) {
-		$command = 'lando exec appserver -- php "' . $php_script_path . '"';
+        // Same as above, but explicit for lando_exec
+        $base_command = 'lando exec appserver -- php';
+        $args = array_merge([$php_script_path], $arguments);
+        $command = $base_command;
+        foreach ($args as $arg) {
+            $escaped_arg = str_replace('"', '\"', $arg);
+            $command .= ' "' . $escaped_arg . '"';
+        }
+
 	} elseif ( 'docker' === $command_type ) {
 		$command = 'php ' . $php_script_path;
 	} else {
@@ -565,16 +608,23 @@ function format_php_command( string $php_script_path, array $arguments = [], str
 	}
 
 	// Add arguments if provided
-	if ( ! empty( $arguments ) ) {
-		foreach ( $arguments as $key => $value ) {
-			// If the key is numeric, just add the value (positional argument)
-			if ( is_numeric( $key ) ) {
-				$command .= ' "' . (string) $value . '"';
-			} else {
-				// Otherwise, it's a named argument
-				$command .= ' --' . $key . '="' . (string) $value . '"';
-			}
-		}
+    if ( 'docker' === $command_type || 'direct' === $command_type ) {
+        if ( ! empty( $arguments ) ) {
+            foreach ( $arguments as $key => $value ) {
+                // If the key is numeric, just add the value (positional argument)
+                if ( is_numeric( $key ) ) {
+                    $command .= ' "' . (string) $value . '"';
+                } else {
+                    // Otherwise, it's a named argument
+                    $command .= ' --' . $key . '="' . (string) $value . '"';
+                }
+            }
+        }
+	}
+
+	// Show the constructed command when debug flag is set
+	if (has_cli_flag(['--debug'])) {
+		colored_message("Debug: Constructed PHP command: " . $command, 'blue');
 	}
 
 	return $command;
@@ -591,9 +641,10 @@ function format_php_command( string $php_script_path, array $arguments = [], str
  *                              (e.g., ['composer', 'install', '--no-dev']) or as a single string
  *                              (e.g., ['composer install --no-dev']).
  * @param string $service       The Lando service to run the command on. Defaults to 'appserver'.
+ * @param string $debug_flag    Optional debug flag to add to the command when --debug is set (e.g., '--verbose', '-vvv').
  * @return string The formatted Lando exec command string.
  */
-function format_lando_exec_command(array $command_parts, string $service = 'appserver'): string
+function format_lando_exec_command(array $command_parts, string $service = 'appserver', string $debug_flag = ''): string
 {
     // If the command is passed as a single string in the array, split it into parts.
     if (count($command_parts) === 1
@@ -604,12 +655,24 @@ function format_lando_exec_command(array $command_parts, string $service = 'apps
     // Escape each part of the command to prevent shell injection issues.
     $escaped_parts = array_map('escapeshellarg', $command_parts);
 
+    // Add debug flag if --debug is set and a debug flag was provided
+    if (!empty($debug_flag) && has_cli_flag(['--debug'])) {
+        $escaped_parts[] = escapeshellarg($debug_flag);
+    }
+
     $command_string = implode(' ', $escaped_parts);
 
     // Return the full lando exec command.
     // Note: The service name is NOT escaped here because it's a controlled value (e.g., 'appserver', 'database')
     // and not user input. Escaping it would add quotes that break the lando command.
-    return sprintf('lando exec %s -- %s', $service, $command_string);
+    $full_command = sprintf('lando exec %s -- %s', $service, $command_string);
+
+    // Show the constructed command when debug flag is set
+    if (has_cli_flag(['--debug'])) {
+        colored_message("Debug: Constructed Lando exec command: " . $full_command, 'blue');
+    }
+
+    return $full_command;
 }
 
 
@@ -635,7 +698,12 @@ function format_mysql_parameters_and_query( string $host, string $user, string $
 
 	// Build the connection parameters exactly matching test expectations
 	// Note the space after -h and -u, but no space after -p
+    if ( $command_type === 'lando_direct' ) {
+        // don't include host
+    	$connection_params = " -u " . escapeshellarg( $user );
+    } else {
 	$connection_params = "-h " . escapeshellarg( $host ) . " -u " . escapeshellarg( $user );
+    }
 
 	// Add password if provided
 	if ( ! empty( $pass ) ) {
@@ -715,8 +783,10 @@ function execute_command_in_target_env(string $ssh_command, string $command_to_r
         $full_command_string = $ssh_command . " bash -c " . $escaped_command_for_bash_c;
     }
 
-    // For debugging, one might uncomment this:
-    // echo "Executing in target env: " . $full_command_string . "\n";
+    // Show command being executed when debug flag is set
+    if (has_cli_flag(['--debug'])) {
+        colored_message("Debug: Executing in target env: " . $full_command_string, 'blue');
+    }
 
     exec($full_command_string . ' 2>&1', $output_lines, $exit_status); // Capture stderr too
 
@@ -834,13 +904,10 @@ function debug_message(string $message, bool $force_output = false): void {
 
     // Initialize $is_verbose only once
     if ($is_verbose === null) {
-        echo "Debug_message: has_cli_flag: ";
-        if (has_cli_flag($verbosity_flags)===true) { echo 'Y'; } else { echo 'N';}
-        echo "\n";
         $is_verbose = get_setting('VERBOSE', false) || has_cli_flag($verbosity_flags);
     }
     if ($is_verbose || $force_output) {
-        echo $message . "\n";
+        colored_message("[DEBUG] " . $message, 'cyan');
     }
 }
 
@@ -900,8 +967,11 @@ function get_lando_info(): array {
         return array();
     }
 
-    // Debug: Show raw lando info output for troubleshooting
-    // colored_message("Debug: Raw lando info output (first 500 chars): " . substr($lando_info_json, 0, 500) . "...\n");
+    // Show raw lando info output for troubleshooting when debug flag is set
+    if (has_cli_flag(['--debug'])) {
+        colored_message("Debug: Raw lando info output:", 'blue');
+        colored_message($lando_info_json, 'blue');
+    }
 
     // Parse JSON output from lando info
     $lando_info = json_decode($lando_info_json, true);
@@ -961,11 +1031,7 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     // Format the MySQL parameters with the appropriate command type
     $mysql_params = format_mysql_parameters_and_query($host, $user, $pass, $sql, $db, $command_type);
 
-    // Debug output
-    // echo "\nDebug: format_mysql_execution input:\n";
-    // echo esc_cli("Original SQL: $sql\n");
-    // echo esc_cli("SSH command: $ssh_command  MySQL params: $mysql_params\n");
-    // echo "Command type: $command_type\n";
+
 
     $cmd = '';
 
@@ -973,7 +1039,7 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     if ($command_type === 'lando_direct') {
         // Use lando mysql directly with the parameters
         $cmd = "lando mysql $mysql_params";
-        // echo esc_cli("Debug: Using direct Lando MySQL format\n");
+
     }
     // Use SSH to execute MySQL
     elseif ($command_type === 'ssh') {
@@ -984,7 +1050,7 @@ function format_mysql_execution( string $ssh_command, string $host, string $user
     else {
         // For direct MySQL commands, use the original format
         $cmd = "mysql $mysql_params";
-        // echo esc_cli("Debug: Using direct MySQL format\n");
+
     }
 
     return $cmd;
@@ -1034,6 +1100,8 @@ function get_wp_config_value( string $search_value, string $wp_config_path ): ?s
 /**
  * Escape a string for CLI output
  *
+ * Should this be modified to echo $text, like colored_message and debug_message do?
+ *
  * @param string $text Text to escape
  * @return string
  */
@@ -1053,7 +1121,24 @@ function esc_cli( string $text ): string {
  * @return bool True if the flag or any of its aliases are found, false otherwise.
  */
 function has_cli_flag(string|array $flags, ?array $source_argv = null): bool {
-    $argv = $source_argv ?? $GLOBALS['argv'] ?? [];
+    // First try the provided source_argv
+    // Then try global $argv if it exists
+    // Then try $GLOBALS['argv'] if it exists
+    // Finally fall back to empty array
+    if ($source_argv !== null) {
+        $argv = $source_argv;
+    } elseif (isset($GLOBALS['argv'])) {
+        $argv = $GLOBALS['argv'];
+    } else {
+        // If we can't get argv, check environment variables as a fallback
+        // for common verbosity flags
+        if (in_array('--verbose', (array)$flags, true) &&
+            ((bool)getenv('VERBOSE') || (bool)getenv('DEBUG'))) {
+            return true;
+        }
+        $argv = [];
+    }
+
     $flags = (array) $flags;
 
     foreach ($argv as $arg) {

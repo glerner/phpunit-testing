@@ -1,61 +1,135 @@
 # Code Inventory - PHPUnit Testing Framework
 
-This document provides an inventory of key functions, classes, and variables in the PHPUnit Testing Framework.
+## Key Files
+
+### Core Framework
+- `/bin/framework-functions.php` - Core utilities and helpers
+- `/bin/setup-plugin-tests.php` - Main test environment setup
+- `/bin/sync-and-test.php` - Test runner with sync
+
+### Test Cases
+- `/src/Unit/Unit_Test_Case.php` - Base for unit tests
+- `/src/Integration/Integration_Test_Case.php` - Base for integration tests
+- `/src/WP_Mock/WP_Mock_Test_Case.php` - Base for WP_Mock tests
+
+### Configuration
+- `phpunit.xml.dist` - Default test configuration
+- `.env.testing` - Test environment variables
+- `composer.json` - Dependencies and autoloading
+
+### Bootstrap
+- `/tests/bootstrap/bootstrap.php` - Main test bootstrap
+- `/tests/bootstrap/bootstrap-unit.php` - Unit test bootstrap
+- `/tests/bootstrap/bootstrap-integration.php` - Integration test bootstrap
+- `/tests/bootstrap/bootstrap-wp-mock.php` - WP_Mock bootstrap
+
+## Environment Specifications
+
+### Supported Versions
+
+- **PHP**: 8.2+ (as per `.lando.yml`)
+  - WordPress 6.8+ recommends PHP 8.1 or 8.2
+  - PHP 8.2+ required for PHPUnit 11.x
+
+- **MySQL**: 8.0+ (as per `.lando.yml`)
+  - Minimum required: 8.0.0
+  - Tested with: 8.0.x
+  - Uses MySQL 8.0 in Lando development environment
+
+- **WordPress**: 6.8+
+  - Compatible with WordPress 6.7+ (PHP 8.0+)
+  - Fully tested with WordPress 6.8
+
+- **Node.js**:
+  - Minimum: 16.x
+  - Recommended: 18.x LTS or newer
+  - Used for frontend build tools and dependencies
+
+### Development Environment
+
+- **Lando** or other local development
+  - Composer 2.8.8+
+  - Xdebug enabled
+
+- **Testing**
+  - PHPUnit 11+ (compatible with PHP 8.2)
+  - WP-CLI for WordPress operations
+
 
 ## Table of Contents
 
-- [Test Class Naming Conventions](#test-class-naming-conventions)
-- [Namespace](#namespace)
+### Core Concepts
+- [Test Class Naming](#test-class-naming-conventions)
+- [Namespaces](#namespace)
 - [Exception Handling](#exception-handling)
-- [Important Global Variables](#important-global-variables)
-- [Functions](#functions)
-  - [build_phpunit_command()](#build_phpunit_command)
-  - [check_phpunit_exists()](#check_phpunit_exists)
-  - [colored_message()](#colored_message)
-  - [display_help() (in setup-plugin-tests.php)](#display_help-in-setup-plugin-tests)
-  - [display_help() (in sync-and-test.php)](#display_help-in-sync-and-test)
-  - [download_wp_tests()](#download_wp_tests)
-  - [drop_test_database_and_files()](#drop_test_database_and_files)
-  - [esc_cli()](#esc_cli)
-  - [find_project_root()](#find_project_root)
-  - [find_wordpress_root()](#find_wordpress_root)
-  - [format_mysql_execution()](#format_mysql_execution)
-  - [format_mysql_parameters_and_query()](#format_mysql_parameters_and_query)
-  - [format_php_command()](#format_php_command)
-  - [format_ssh_command()](#format_ssh_command)
-  - [generate_wp_tests_config()](#generate_wp_tests_config)
-  - [get_cli_value()](#get_cli_value)
-  - [get_lando_info()](#get_lando_info)
-  - [get_phpunit_database_settings()](#get_phpunit_database_settings)
-  - [get_setting()](#get_setting)
-  - [get_wp_config_value()](#get_wp_config_value)
-  - [has_cli_flag()](#has_cli_flag)
-  - [install_wp_test_suite()](#install_wp_test_suite)
-  - [load_settings_file()](#load_settings_file)
-  - [log_message()](#log_message)
-  - [make_path()](#make_path)
-  - [parse_lando_info()](#parse_lando_info)
-  - [trim_folder_settings()](#trim_folder_settings)
-- [Variables](#variables)
-  - [Global Variables](#global-variables)
-  - [Key Configuration Variables](#key-configuration-variables)
-- [Constants](#constants)
-  - [Script Constants](#script-constants)
-  - [Terminal Color Constants](#terminal-color-constants)
+- [WordPress + PSR Standards](#wordpress--psr-standards)
+
+### System Requirements
+- [check_system_requirements()](#check_system_requirements)
+
+### Environment & Setup
+- [Global Variables](#global-variables)
+- [Configuration](#key-configuration-variables)
 - [Dependencies](#dependencies)
+- [Test Environment Setup](#test-environment-setup)
+  - [download_wp_tests()](#download_wp_tests)
+  - [install_wp_test_suite()](#install_wp_test_suite)
+  - [generate_wp_tests_config()](#generate_wp_tests_config)
+  - [execute_command_in_target_env()](#execute_command_in_target_env)
+
+### File System & Paths
+- [find_project_root()](#find_project_root)
+- [find_wordpress_root()](#find_wordpress_root)
+- [make_path()](#make_path)
+- [trim_folder_settings()](#trim_folder_settings)
+
+### Database Operations
+- [get_database_settings()](#get_database_settings)
+- [get_phpunit_database_settings()](#get_phpunit_database_settings)
+- [format_mysql_execution()](#format_mysql_execution)
+- [format_mysql_parameters_and_query()](#format_mysql_parameters_and_query)
+- [drop_test_database_and_files()](#drop_test_database_and_files)
+
+### Lando Integration
+- [is_lando_environment()](#is_lando_environment)
+- [get_lando_info()](#get_lando_info)
+- [parse_lando_info()](#parse_lando_info)
+- [format_php_command()](#format_php_command)
+
+### Command Line Tools
+- [build_phpunit_command()](#build_phpunit_command)
+- [check_phpunit_exists()](#check_phpunit_exists)
+- [format_php_command()](#format_php_command)
+- [format_ssh_command()](#format_ssh_command)
+- [get_cli_value()](#get_cli_value)
+- [has_cli_flag()](#has_cli_flag)
+- [display_help()](#display_help) (each script can have its own)
+- [print_usage()](#print_usage)
+
+### Logging & Output
+- [colored_message()](#colored_message)
+- [esc_cli()](#esc_cli)
+- [log_message()](#log_message)
+- [get_setting()](#get_setting)
+- [load_settings_file()](#load_settings_file)
+- [get_wp_config_value()](#get_wp_config_value)
+
+### Bootstrap & Configuration
 - [Bootstrap Files](#bootstrap-files)
-- [Command Line in Plugins Using WP_PHPUnit_Framework](#command-line-in-plugins-using-wp_phpunit_framework)
-  - [Bootstrap File Relationships](#bootstrap-file-relationships)
   - [bootstrap.php](#bootstrapphp)
   - [bootstrap-unit.php](#bootstrap-unitphp)
-  - [bootstrap-wp-mock.php](#bootstrap-wp-mockphp)
   - [bootstrap-integration.php](#bootstrap-integrationphp)
-- [Test Execution Scripts](#test-execution-scripts)
-  - [sync-and-test.php](#sync-and-testphp)
-- [Configuration Files](#configuration-files)
-  - [phpunit-integration.xml](#phpunit-integrationxml)
-  - [phpunit-unit.xml](#phpunit-unitxml)
-  - [phpunit-wp-mock.xml](#phpunit-wp-mockxml)
+  - [bootstrap-wp-mock.php](#bootstrap-wp-mockphp)
+- [Configuration](#configuration)
+  - [get_setting()](#get_setting)
+  - [load_settings_file()](#load_settings_file)
+  - [Configuration Files](#configuration-files)
+    - [phpunit-unit.xml](#phpunit-unitxml)
+    - [phpunit-integration.xml](#phpunit-integrationxml)
+    - [phpunit-wp-mock.xml](#phpunit-wp-mockxml)
+
+### Test Execution
+- [sync-and-test.php](#sync-and-testphp)
 
 >Note: several functions have been moved to `framework-functions.php` and this document still lists them in their old locations.
 
@@ -378,6 +452,21 @@ function is_lando_environment(): bool
 
 **Purpose**: Checks if the script is running inside a Lando container or if Lando is active on the host.
 
+### `parse_lando_info()`
+
+**Location**: `/bin/framework-functions.php`
+
+```php
+function parse_lando_info(): ?array
+```
+
+**Purpose**: Parses Lando configuration from LANDO_INFO environment variable.
+
+**Return Value**:
+- `array`: parsed JSON associative array
+- `null`: If not in a Lando environment
+
+
 ### `get_lando_info()`
 
 **Location**: `/bin/framework-functions.php`
@@ -389,7 +478,7 @@ namespace WP_PHPUnit_Framework\Bin;
 function get_lando_info(): array
 ```
 
-**Purpose**: Retrieves Lando service information (e.g., database credentials) by executing the `lando info` command on the host machine and parsing its JSON output. This function is essential for connecting to the database in a Lando environment from an external script.
+**Purpose**: Retrieves Lando service information (e.g., database credentials) by executing the `lando info` command on the host machine and parsing its JSON output. This function is essential for connecting to the database in a Lando environment from an external script. When the `--debug` flag is set, it will display the full raw Lando info output for troubleshooting.
 
 **Related**: `parse_lando_info()`
 
@@ -399,9 +488,106 @@ function get_lando_info(): array
 - Type: `array`
 - An associative array of the Lando configuration, or an empty array if Lando is not running or the configuration cannot be parsed.
 
+
+### `format_lando_exec_command()`
+
+**Location**: `/bin/framework-functions.php`
+
+**Signature**:
+```php
+function format_lando_exec_command(array $command_parts, string $service = 'appserver', string $debug_flag = ''): string
+```
+
+**Purpose**: Formats commands for execution in Lando containers with proper escaping.
+
+**Usage**:
+- Pass command parts as array: `['composer', 'test']` or `['composer test']`
+- Automatically adds debug flag when `--debug` is set
+- Returns command ready for `passthru()` or `exec()`
+
 **Logic Flow**:
 1.  Checks if a Lando environment is running by calling `is_lando_environment()`. If not, it displays a message and returns an empty array.
 2.  Executes `lando info --format=json` to get the configuration details.
+
+### `format_mysql_parameters_and_query()`
+
+**Location**: `/bin/framework-functions.php`
+
+```php
+function format_mysql_parameters_and_query(
+    string $host,
+    string $user,
+    string $pass,
+    string $sql,
+    ?string $db = null,
+    string $command_type = 'direct'
+): string
+```
+
+**Purpose**: Formats MySQL connection parameters and SQL query for execution.
+
+**Parameters**:
+- `$host`: Database host
+- `$user`: Database username
+- `$pass`: Database password
+- `$sql`: SQL query to execute
+- `$db`: Optional database name
+- `$command_type`: Type of command ('direct', 'lando_direct', or 'ssh')
+
+**Usage**:
+- Handles proper escaping of SQL based on command type
+- Returns formatted parameters ready for MySQL client
+- Used internally by `format_mysql_execution()`
+
+### `execute_command_in_target_env()`
+
+**Location**: `/bin/framework-functions.php`
+
+**Signature**:
+```php
+function execute_command_in_target_env(string $command_to_run, string $ssh_command = ''): array
+```
+
+**Purpose**: Runs commands in target environment (local, Lando, or SSH) with proper output capture.
+
+**Usage**:
+- Returns array with 'output' and 'return_var'
+- Uses `$ssh_command` for remote execution if provided
+- Escapes commands to prevent injection
+  - `output`: Array of output lines
+  - `status`: Exit status code
+
+**Debug Behavior**: When the `--debug` flag is set, displays the full command being executed using `colored_message()`.
+
+### `format_php_command()`
+
+**Location**: `/bin/framework-functions.php`
+
+**Signature**:
+```php
+function format_php_command(string $script_path, array $options = []): string
+```
+
+**Purpose**: Formats a PHP command with proper options and arguments. Handles PHP configuration options and command-line arguments.
+
+**Parameters**:
+- `$script_path`: Path to the PHP script to execute.
+  - Type: string
+  - Required: Yes
+- `$options`: Array of PHP options to include in the command.
+  - Type: array
+  - Default: []
+  - Required: No
+  - Common options include:
+    - `memory_limit`: PHP memory limit (e.g., '256M')
+    - `display_errors`: Whether to display errors (0 or 1)
+    - `error_reporting`: Error reporting level (e.g., E_ALL)
+
+**Return Value**:
+- Type: string
+- The formatted PHP command string ready for execution.
+
+**Debug Behavior**: When the `--debug` flag is set, displays the constructed PHP command using `colored_message()`.
 
 ### `check_phpunit_exists()`
 
@@ -730,39 +916,28 @@ function format_mysql_parameters_and_query(
 
 **Location**: `/bin/framework-functions.php`
 
-**Signature**:
 ```php
-namespace WP_PHPUnit_Framework\Bin;
 function format_mysql_execution(
-    string $ssh_command,
-    string $host,
-    string $user,
-    string $pass,
-    string $sql,
-    ?string $db = null
+    string $ssh_command,  // 'lando ssh', 'ssh user@host', or '' for local
+    string $host,         // Database host
+    string $user,         // Database user
+    string $pass,         // Database password
+    string $sql,          // SQL query to execute
+    ?string $db = null    // Optional database name
 ): string
 ```
 
-**Purpose**: A high-level wrapper that constructs the complete, executable shell command for running a MySQL query. It correctly formats the command for different target environments (Lando, remote SSH, or direct local execution).
+**Purpose**: Builds MySQL commands for Lando, SSH, or local execution.
 
-**Parameters**:
-- `$ssh_command`: The SSH command string (e.g., 'lando ssh', 'ssh user@host', or an empty string for local execution).
-- `$host`: Database host.
-- `$user`: Database user.
-- `$pass`: Database password.
-- `$sql`: The SQL query to execute.
-- `$db`: (Optional) The specific database to use.
-
-**Return Value**:
-- Type: `string`
-- The full shell command ready for execution (e.g., `lando mysql -h...` or `ssh user@host 'mysql -h...'`).
+**Usage**:
+- Handles command escaping for different environments
+- Returns complete shell command ready for execution
+- Works with Lando, SSH, and direct MySQL connections
 
 **Dependencies & Call Flow**:
 - This function determines the execution environment (`direct`, `ssh`, `lando`) and then calls other functions to build the command.
 - **`format_mysql_parameters_and_query()`**: Called to format the core `mysql ...` arguments and handle SQL escaping appropriate for the environment.
 - **`format_ssh_command()`**: If an SSH connection is needed, this function is used to wrap the `mysql` command for remote execution.
-
-
 
 
 
@@ -810,30 +985,43 @@ function load_settings_file(?string $env_file = null): array {
 }
 ```
 
+### `display_composer_test_instructions()`
+should be renamed, since got rid of "composer test:*", only using bin/sync-and-test.php
+
+**Location**: `/bin/framework-functions.php`
+
+```php
+function display_composer_test_instructions(
+    bool $is_lando,
+    string $plugin_dir
+): void
+```
+
+**Purpose**: Displays instructions for running tests via the sync script, for your environment.
+
+**Parameters**:
+- `$is_lando`: Whether the environment is Lando
+- `$plugin_dir`: Path to the plugin directory
+
 ### `format_ssh_command()`
 
 **Location**: `/bin/framework-functions.php`
 
 **Signature**:
 ```php
-namespace WP_PHPUnit_Framework;
-
-function format_ssh_command(string $ssh_command, string $command): string
+function format_ssh_command(
+    string $ssh_command,  // e.g., 'lando ssh' or 'ssh user@host'
+    string $command       // Command to run remotely
+): string
 ```
 
-**Purpose**: Wraps a command in the appropriate format for execution over SSH, based on the SSH_COMMAND setting, handling special cases like Lando.
+**Purpose**: Formats commands for remote execution via SSH or Lando SSH.
 
-**Parameters**:
-- `$ssh_command`: The base SSH connection command (e.g., `lando ssh` or `ssh user@host`).
-- `$command`: The command to be executed on the remote server.
-
-**Return Value**:
-- A single string ready for execution, with the remote command properly quoted and error output redirected to stdout (`2>&1`).
-
-**Essential Note**:
-- It specifically checks for `lando ssh` and uses the required `-c` flag for command execution in that environment.
-2. For Lando SSH, format as: `lando ssh -c '  command  ' 2>&1`
-3. For regular SSH, format as: `ssh_command '  command  ' 2>&1`
+**Usage**:
+- Handles both Lando and regular SSH command formatting
+- Automatically adds error redirection (`2>&1`)
+- Shows debug output when `--debug` flag is set
+- Special handling for Lando's required `-c` flag
 
 ### `is_lando_environment()`
 
@@ -844,7 +1032,7 @@ function format_ssh_command(string $ssh_command, string $command): string
 function is_lando_environment(?string $command = null): bool
 ```
 
-**Purpose**: Determines if the current environment is a Lando environment or if a specified command is a Lando command.
+**Purpose**: Checks for Lando environment or Lando command.
 
 **Parameters**:
 - `$command`: Optional command to check if it's a Lando command
@@ -940,21 +1128,13 @@ function parse_lando_info(): ?array
 - Lando configuration as an array if successful, null if not in a Lando environment or if parsing fails
 
 **Logic Flow**:
-1. Attempts to read the LANDO_INFO environment variable (does not execute 'lando info' command)
-2. If empty, return null (not in a Lando container)
-3. Parse the JSON data from the environment variable
-4. If JSON parsing fails, display warning and return null
-5. Return the parsed Lando configuration
+- Attempts to read the LANDO_INFO environment variable (does not execute 'lando info' command)
+- Parse the JSON data from the environment variable
 
 **Important Note**:
-- This function relies on the LANDO_INFO environment variable which is only available inside Lando containers
+- This function relies on the LANDO_INFO environment variable which is only available inside Lando containers or when using 'lando ssh'
 - It's different from get_lando_info() which executes the 'lando info' command and works from outside containers
-- LANDO_INFO environment variable only exists inside Lando containers or when using 'lando ssh'
 
-
-**Command Line Options Documented**:
-- `--help, -h`: Display the help message
-- `--remove-all, --remove`: Remove test database and files
 
 ### `get_setting()`
 
@@ -1266,10 +1446,11 @@ Some scripts in the framework's `bin` directory are intended to be run directly 
 
 ### `setup-plugin-tests.php`
 
-This script should be executed from its location within the `tests/gl-phpunit-test-framework/bin/` directory. 
+This script should be executed from its location within the `tests/gl-phpunit-test-framework/bin/` directory (for submodule installations) or `tests/vendor/glerner/phpunit-testing` for Composer installations.
 
 **Example Usage:**
 ```bash
+cd ~/sites/yourplugin
 php tests/gl-phpunit-test-framework/bin/setup-plugin-tests.php
 ```
 
