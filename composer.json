@@ -29,17 +29,18 @@
         "wp-coding-standards/wpcs": "^3.1"
     },
     "autoload": {
-        "psr-4": {
-            "WP_PHPUnit_Framework\\": "src/"
-        },
+        "classmap": ["src/"],
         "exclude-from-classmap": [
             "src/Stubs/"
         ]
     },
     "autoload-dev": {
-        "psr-4": {
-            "WP_PHPUnit_Framework\\Tests\\Framework\\": "tests/Framework/"
-        }
+        "classmap": [
+            "tests/Framework/",
+            "tests/Unit/",
+            "tests/Integration/",
+            "tests/WP_Mock/"
+        ]
     },
     "scripts": {
         "test:framework": "phpunit -c tests/bootstrap/phpunit-framework-tests.xml",

@@ -4,10 +4,10 @@
  *
  * Manages database connections with connection pooling and validation.
  *
- * @package GL_Reinvent\Service
+ * @package WP_PHPUnit_Framework\Service
  */
 
-namespace GL_Reinvent\Service;
+namespace WP_PHPUnit_Framework\Service;
 
 class Database_Connection_Manager {
     /**
@@ -40,9 +40,22 @@ class Database_Connection_Manager {
     private const MAX_CONNECTION_LIFETIME = 1800;
 
     /**
+     * Whether we're running in a Lando environment
+     *
+     * @var bool
+     */
+    private bool $is_lando = false;
+
+    /**
      * Class constructor.
      */
-    private function __construct() {}
+    private function __construct() {
+        $test_file = dirname(__DIR__, 3) . '/bin/test-mysql-escaping.php';
+        if (file_exists($test_file)) {
+            require_once $test_file;
+            $this->is_lando = \WP_PHPUnit_Framework\is_lando_environment();
+        }
+    }
 
     /**
      * Get the singleton instance
@@ -58,6 +71,15 @@ class Database_Connection_Manager {
 
     /**
      * Get a database connection
+     *
+     * This method handles two primary modes of operation:
+     * 1. Direct mode: When PHP and MySQL are running directly on the host file system
+     * 2. Fully inside Lando container: When PHP is running inside a Lando container
+     *
+     * Note: For "dipping into Lando" scenarios (PHP on host, database in Lando),
+     * use execute_mysqli_lando() or format_mysql_execution() instead of this method.
+     * Connection pooling is not beneficial in that scenario as each query requires
+     * a separate lando php command execution.
      *
      * @param string $host Database host.
      * @param string $user Database user.
@@ -81,7 +103,8 @@ class Database_Connection_Manager {
             $this->close_connection($connection_key);
         }
 
-        // Create new connection
+        // Create new connection - same approach for both direct and inside-Lando modes
+        // When inside Lando container, we use direct mysqli connections (no 'lando' prefix needed)
         $mysqli = new \mysqli($host, $user, $pass, $db ?? '');
         if ($mysqli->connect_error) {
             throw new \RuntimeException(

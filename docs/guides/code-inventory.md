@@ -158,7 +158,7 @@
 
    | Type | Location | Naming Convention | Example |
    |------|----------|-------------------|---------|
-   | **Class Files** | `src/` | Match class name (PascalCase) | `Journey_Questions_Model.php` |
+   | **Class Files** | `src/` | Match class name (Pascal_Case) | `Journey_Questions_Model.php` |
    | **Test Files** | `tests/` | `test-{feature}.php` (kebab-case) | `test-journey-questions.php` |
    | **Main Plugin File** | Root | `plugin-name.php` (kebab-case) | `reinvent-coaching-process.php` |
    | **Assets** | `assets/` | kebab-case | `main.js`, `admin-styles.css` |
@@ -168,7 +168,7 @@
    When requesting code generation, specify:
    ```
    Follow these naming conventions:
-   - Class files: PSR-4 PascalCase matching class name (e.g., `Journey_Questions_Model.php`)
+   - Class files: PSR-4 Pascal_Case matching class name (e.g., `Journey_Questions_Model.php`)
    - Test files: WordPress kebab-case (e.g., `test-journey-questions.php`)
    - Non-PHP files: kebab-case (e.g., `admin-styles.css`)
    ```
@@ -250,7 +250,7 @@ src/
 
 ### File Naming
 - Base test classes use `PascalCase` (e.g., `Unit_Test_Case.php`)
-- Stub classes use `PascalCase` (e.g., `WP_UnitTestCase.php`)
+- Stub classes use `PascalCase` (e.g., `WP_Unit_Test_Case.php`)
 - Test files use `kebab-case` (e.g., `test-journey-questions-model.php`)
 
 ### Rationale

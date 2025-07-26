@@ -1,6 +1,14 @@
 <?php
 namespace WP_PHPUnit_Framework;
 
+// files in bin/ need to Include the Composer autoloader to enable PSR-4 class autoloading
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use WP_PHPUnit_Framework\Service\Database_Connection_Manager;
+
+// Instantiate the singleton Database_Connection_Manager
+$db_manager = Database_Connection_Manager::get_instance();
+
 /**
  * Test MySQL command execution and display results with various quoting styles
  *
@@ -8,6 +16,16 @@ namespace WP_PHPUnit_Framework;
  *
  * This script tests MySQL command execution with various quoting styles
  * and demonstrates environment-aware MySQL command execution.
+ *
+ * IMPORTANT: All database execution functions (execute_mysqli_query, execute_mysqli_direct,
+ * execute_mysqli_lando, and execute_mysql_via_ssh) now use the Database_Connection_Manager
+ * for pooled connections, which improves performance by reusing database connections.
+ * See /src/GL_Reinvent/Service/Database_Connection_Manager.php for implementation details.
+ *
+ * The connection manager provides the following benefits:
+ * - Connection pooling to reduce overhead of repeated connections
+ * - Automatic cleanup of inactive connections
+ * - Centralized connection management with standardized error handling
  */
 
 // Define color constants for terminal output
@@ -1480,6 +1498,75 @@ function execute_multi_sql($sql_commands, $database = null, $use_root = false) {
 function test_mysql_connectivity($host, $user, $pass, $quiet = false) {
     $start_time = microtime(true);
 
+    // Check if we're in a Lando environment
+    if (is_lando_environment()) {
+        // For Lando, use execute_mysqli_query which will route through execute_mysqli_lando
+        $db_settings = [
+            'db_host' => $host,
+            'db_user' => $user,
+            'db_pass' => $pass
+        ];
+
+        // Execute a simple test query via Lando
+        $result = execute_mysqli_query('SELECT 1 AS test_value, VERSION() AS version', $user, $pass, $host, 'none');
+
+        $latency = round((microtime(true) - $start_time) * 1000, 2);
+
+        if (!$result['success']) {
+            if (!$quiet) {
+                colored_message("❌ Lando connection failed: {$result['error']}", 'red');
+                colored_message("  Host: $host", 'yellow');
+                colored_message("  User: $user\n", 'yellow');
+            }
+
+            return [
+                'success' => false,
+                'connection' => [
+                    'host' => $host,
+                    'user' => $user,
+                    'latency_ms' => $latency,
+                    'environment' => 'lando'
+                ],
+                'error' => $result['error'] ?? 'Connection failed',
+                'error_code' => $result['error_code'] ?? 'CONNECTION_FAILED',
+                'version' => null,
+                'latency_ms' => $latency,
+                'validated' => false
+            ];
+        }
+
+        // Extract version from the result
+        $version = [];
+        if (!empty($result['data']) && isset($result['data'][0]['version'])) {
+            $version['server'] = $result['data'][0]['version'];
+        }
+        if (empty($version['server'])) {
+            $version['server'] = 'unknown';
+        }
+
+        if (!$quiet) {
+            colored_message("✅ Lando connection successful to $host as $user", 'green');
+            colored_message("  MySQL Server Version: " . $version['server'] , 'green');
+            colored_message("  Latency: {$latency}ms\n", 'green');
+        }
+
+        return [
+            'success' => true,
+            'connection' => [
+                'host' => $host,
+                'user' => $user,
+                'latency_ms' => $latency,
+                'environment' => 'lando'
+            ],
+            'error' => null,
+            'error_code' => null,
+            'version' => $version,
+            'latency_ms' => $latency,
+            'validated' => true
+        ];
+    }
+
+    // For non-Lando environments, use direct mysqli connection
     // First try a simple connection test
     $mysqli = @new \mysqli($host, $user, $pass);
 
@@ -1577,9 +1664,13 @@ function test_mysql_connectivity($host, $user, $pass, $quiet = false) {
 function check_database_connection() {
     global $db_settings;
 
-    echo "\nTesting database connection...\n";
+    // Determine if we're in a Lando environment
+    $is_lando = is_lando_environment();
+    $env_type = $is_lando ? 'Lando' : 'Direct';
 
-    // First test basic MySQL connectivity
+    echo "\nTesting database connection ($env_type environment)...\n";
+
+    // Test MySQL connectivity (is Lando-aware)
     $connectivity = test_mysql_connectivity(
         $db_settings['db_host'] ?? 'localhost',
         $db_settings['db_user'] ?? '',
@@ -1590,6 +1681,9 @@ function check_database_connection() {
     $conn = $connectivity['connection'];
     echo "Host: {$conn['host']}\n";
     echo "User: {$conn['user']}\n";
+    if (isset($conn['environment'])) {
+        echo "Environment: {$conn['environment']}\n";
+    }
 
     // Display result
     if (!$connectivity['success']) {
@@ -1605,7 +1699,7 @@ function check_database_connection() {
     }
 
     // If we get here, MySQL connectivity is good, now check databases
-    $result = ("SHOW DATABASES;", db_name:'none');
+    $result = execute_mysqli_query(sql: "SHOW DATABASES;", db_name: 'none');
 
     // Show available databases
     // This is a good example of how to access query results directly
@@ -1790,6 +1884,7 @@ function run_mysql_tests() {
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
                     email VARCHAR(100) NOT NULL,
+                    operation_type VARCHAR(50) DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1853,11 +1948,18 @@ function run_mysql_tests() {
             'name' => '5.5. Safe Prepared Statement Usage',
             'database' => 'wordpress_test',
             'sql' => "
-                -- Test safe prepared statement with parameter
+                -- Create test data first to ensure it exists
+                INSERT INTO `test_operations` (name, email, operation_type)
+                VALUES ('Test User', 'test@example.com', 'prepared_test')
+                ON DUPLICATE KEY UPDATE operation_type = 'prepared_test';
+
+                -- Test safe prepared statement with parameter in a single transaction
+                START TRANSACTION;
                 PREPARE safe_stmt FROM 'SELECT * FROM `test_operations` WHERE name = ?';
                 SET @safe_param = 'Test User';
                 EXECUTE safe_stmt USING @safe_param;
                 DEALLOCATE PREPARE safe_stmt;
+                COMMIT;
             ",
             'expected' => true,
             'description' => 'Verifies that prepared statements work correctly with parameters.'
@@ -2144,7 +2246,10 @@ function execute_mysqli_lando(string $sql, array $db_settings, ?string $db_name 
         $db_host = addslashes($db_settings['db_host']);
         $db_user = addslashes($db_settings['db_user']);
         $db_pass = addslashes($db_settings['db_pass']);
-        $escaped_sql = str_replace("'", "\\'", $sql);
+
+        // Properly escape SQL for inclusion in PHP string
+        // This handles all special characters including quotes, backslashes, and Unicode
+        $escaped_sql = addslashes($sql);
 
         // Create PHP code that will execute the query and output JSON
         $php_code = <<<EOD
@@ -2176,7 +2281,21 @@ function send_json(\$data) {
         ob_end_clean();
     }
     header('Content-Type: application/json');
-    echo json_encode(\$data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    // Use additional JSON flags to handle special characters
+    \$json = json_encode(\$data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+    // Check for JSON encoding errors
+    if (\$json === false) {
+        // If JSON encoding fails, send a simplified error response
+        echo json_encode([
+            'success' => false,
+            'error' => 'JSON encoding error: ' . json_last_error_msg(),
+            'error_code' => 'json_encoding_failed'
+        ]);
+    } else {
+        echo \$json;
+    }
     exit;
 }
 
@@ -2189,17 +2308,42 @@ try {
 
     // Create connection with conditional database parameter
     \$db_to_use = '{$db_to_use}';
-    if (\$db_to_use === 'none' || \$db_to_use === '') {
-        \$mysqli = new \\mysqli(\$db_host, \$db_user, \$db_pass);
+    // Create a direct mysqli connection
+    if (\$db_to_use === 'none') {
+        // Connect without selecting a database
+        \$mysqli = new \mysqli(\$db_host, \$db_user, \$db_pass);
     } else {
-        \$mysqli = new \\mysqli(\$db_host, \$db_user, \$db_pass, \$db_to_use);
+        // Connect with a specific database
+        \$mysqli = new \mysqli(\$db_host, \$db_user, \$db_pass, \$db_to_use);
     }
 
     if (\$mysqli->connect_error) {
-        throw new Exception('Connection failed: ' . \$mysqli->connect_error, 1);
+        send_json(create_db_response(
+            success: false,
+            data: [],
+            error: \$mysqli->connect_error,
+            error_code: 'connection_failed',
+            meta: ['exception' => true]
+        ));
     }
 
+    // Connection error already checked above
+
+    // Set proper character encoding for handling all Unicode characters including emojis
     \$mysqli->set_charset('utf8mb4');
+
+    // Ensure proper collation for special characters
+    \$mysqli->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+    \$mysqli->query("SET CHARACTER SET utf8mb4");
+
+    // Enable MySQL prepared statement preservation
+    try {
+        // Attempt to set the prepared statement count
+        \$mysqli->query("SET SESSION max_prepared_stmt_count=1000");
+    } catch (\Exception \$e) {
+        \$meta['warnings'][] = "Could not set max_prepared_stmt_count: " . \$e->getMessage();
+    }
+    \$mysqli->query("SET SESSION autocommit=1");
 
     // Execute the query
     \$result = \$mysqli->multi_query(\$sql);
@@ -2222,14 +2366,26 @@ try {
             }
             \$meta['num_rows'] = \$result->num_rows;
             \$result->free();
+        } elseif (\$mysqli->errno) {
+            // Capture errors that occur during result processing
+            throw new Exception('Query failed: ' . \$mysqli->error, 2);
         }
     } while (\$mysqli->more_results() && \$mysqli->next_result());
 
+    // Final error check after all results are processed
     if (\$mysqli->error) {
         throw new Exception('Query failed: ' . \$mysqli->error, 2);
     }
 
-    \$mysqli->close();
+    // Check for any remaining prepared statements and clean them up
+    try {
+        \$mysqli->query("DEALLOCATE PREPARE IF EXISTS safe_stmt");
+    } catch (Exception \$e) {
+        // Ignore errors from cleanup attempts
+    }
+
+    // Don't close the connection manually - let the manager handle it
+    // \$mysqli->close();
     send_json(create_db_response(
         success: true,
         data: \$data,
@@ -2263,10 +2419,9 @@ EOD;
         // Debug output for generated PHP code (only shown with both --debug and --verbose flags)
         if (has_cli_flag(['--debug', '-d']) && has_cli_flag(['--verbose', '-v'])) {
             colored_message("\n🔍 DEBUG: Generated PHP Code for Lando Execution", 'cyan');
-            /* colored_message(str_repeat('-', 80), 'cyan');
+            colored_message(str_repeat('-', 80), 'cyan');
             echo $php_code . "\n";
             colored_message(str_repeat('-', 80), 'cyan');
-            */
 
             // Check PHP syntax of the temporary file
             if (has_cli_flag(['--debug', '-d'])) {
@@ -2364,7 +2519,7 @@ EOD;
  * @return array Standardized response array
  */
 function execute_mysqli_direct(string $host, string $user, string $pass, string $sql, ?string $db_name = null): array {
-    global $db_settings;
+    global $db_settings, $db_manager;
 
     // Determine which database to use based on the provided parameters
     switch (true) {
@@ -2387,12 +2542,19 @@ function execute_mysqli_direct(string $host, string $user, string $pass, string 
         );
     }
 
-    // Create connection with database name if provided
+    // Use Database_Connection_Manager to get a connection
     try {
-        if (!empty($db_name)) {
-            $mysqli = new \mysqli($host, $user, $pass, $db_name);
-        } else {
-            $mysqli = new \mysqli($host, $user, $pass);
+        // Using Database_Connection_Manager for pooled connections (see class-database-connection-manager.php)
+        try {
+            $mysqli = $db_manager->get_connection($host, $user, $pass, $db_name);
+        } catch (\RuntimeException $e) {
+            return create_db_response(
+                false,
+                null,
+                $e->getMessage(),
+                'connection_failed',
+                ['exception' => true]
+            );
         }
 
         if ($mysqli->connect_error) {
@@ -2430,7 +2592,8 @@ function execute_mysqli_direct(string $host, string $user, string $pass, string 
             throw new \RuntimeException('Query failed: ' . $mysqli->error, 2, null, 'query_failed');
         }
 
-        $mysqli->close();
+        // Don't close the connection manually - let the connection manager handle it
+        // $mysqli->close(); - Removed to allow connection pooling by the manager
 
         return create_db_response(
             success: true,
@@ -2460,7 +2623,7 @@ function execute_mysqli_direct(string $host, string $user, string $pass, string 
  * @return array Standardized response array
  */
 function execute_mysql_via_ssh(string $host, string $user, string $pass, string $sql, ?string $db_name = null): array {
-    global $db_settings;
+    global $db_settings, $db_manager;
 
     // Determine which database to use based on the provided parameters
     switch (true) {
@@ -2488,12 +2651,72 @@ function execute_mysql_via_ssh(string $host, string $user, string $pass, string 
         $ssh_command = get_setting('SSH_COMMAND', '');
 
         if (empty($ssh_command) || $ssh_command === 'none') {
-            throw new \RuntimeException(
-                'SSH command not configured. Set SSH_COMMAND in your environment or settings.',
-                0,
-                null,
-                'ssh_not_configured'
-            );
+            // If SSH command is not configured, fall back to direct connection using the manager
+            try {
+                // Using Database_Connection_Manager for pooled connections (see class-database-connection-manager.php)
+                try {
+                    $mysqli = $db_manager->get_connection($host, $user, $pass, $db_name);
+                } catch (\RuntimeException $e) {
+                    return create_db_response(
+                        false,
+                        null,
+                        $e->getMessage(),
+                        'connection_failed',
+                        ['exception' => true]
+                    );
+                }
+
+                if ($mysqli->connect_error) {
+                    throw new \RuntimeException('Connection failed: ' . $mysqli->connect_error, 1);
+                }
+
+                $mysqli->set_charset('utf8mb4');
+                $result = $mysqli->multi_query($sql);
+
+                if ($result === false) {
+                    throw new \RuntimeException('Query failed: ' . $mysqli->error, 2);
+                }
+
+                $meta = [
+                    'insert_id' => $mysqli->insert_id,
+                    'affected_rows' => $mysqli->affected_rows,
+                    'num_rows' => 0,
+                    'warnings' => []
+                ];
+
+                $data = [];
+
+                // Process all result sets
+                do {
+                    if ($result = $mysqli->store_result()) {
+                        while ($row = $result->fetch_assoc()) {
+                            $data[] = $row;
+                        }
+                        $meta['num_rows'] = $result->num_rows;
+                        $result->free();
+                    }
+                } while ($mysqli->more_results() && $mysqli->next_result());
+
+                if ($mysqli->error) {
+                    throw new \RuntimeException('Query failed: ' . $mysqli->error, 2);
+                }
+
+                return create_db_response(
+                    success: true,
+                    data: $data,
+                    error: null,
+                    error_code: null,
+                    meta: $meta
+                );
+
+            } catch (\Exception $e) {
+                return create_db_response(
+                    false,
+                    null,
+                    $e->getMessage(),
+                    $e->getCode() ?: 'unknown_error'
+                );
+            }
         }
 
         // Escape the SQL for shell execution

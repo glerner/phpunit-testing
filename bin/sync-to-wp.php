@@ -229,6 +229,18 @@ colored_message("==== Started sync-to-wp main() =====\n");
         chdir($your_plugin_dest);
         colored_message("Regenerating autoloader files in: " . getcwd(), 'yellow');
 
+        // Check if lando command is available in the PATH
+        $lando_available = !empty(shell_exec('which lando 2>/dev/null'));
+        
+        if (!$lando_available) {
+            colored_message("ERROR: The 'lando' command was not found in your PATH.", 'red');
+            colored_message("Please ensure Lando is installed and in your PATH by running:", 'yellow');
+            colored_message("  source ~/.bashrc", 'cyan');
+            colored_message("Then run this script again.", 'yellow');
+            chdir($cwd);
+            exit(1);
+        }
+
         // Use the dedicated helper function to build the Lando exec command.
         $command = format_lando_exec_command(['composer install']);
         echo esc_cli("Executing: $command\n");

@@ -34,6 +34,9 @@ use function WP_PHPUnit_Framework\is_lando_environment;
 // Include the framework utility functions early so we can use its functions
 require_once __DIR__ . '/framework-functions.php';
 
+// files in bin/ need to Include the Composer autoloader to enable PSR-4 class autoloading
+require_once __DIR__ . '/../vendor/autoload.php';
+
 // Define SCRIPT_DIR. We use this to find the project root.
 define('SCRIPT_DIR', __DIR__);
 
