@@ -633,15 +633,45 @@ function mysqli_create_user(array $user_settings): array {
 }
 
 // Load settings from .env.testing
-// Allow this file to be in plugin root  (while testing *only*), normally in bin
-$settings_file = __DIR__;
-if (!file_exists($settings_file . '/tests/.env.testing')) {
-    $settings_file = dirname($settings_file);
+// This file should be in plugin_root/bin
+// Check for --env-testing parameter first (highest priority)
+$env_file = null;
+if (has_cli_flag(['--env-testing'])) {
+    $env_file = get_cli_value('--env-testing');
+    if ($env_file && file_exists($env_file)) {
+        colored_message("Using .env.testing from command line parameter: $env_file\n", 'green');
+    } else {
+        colored_message("Warning: Specified .env.testing file not found: $env_file\n", 'yellow');
+        $env_file = null;
+    }
 }
-$settings_file .= '/tests/.env.testing';
-colored_message("Looking for .env.testing in $settings_file\n", 'blue');
 
-$env_settings = load_settings_file(dirname($settings_file) . '/.env.testing');
+// If no valid file from command line, try current working directory first
+if (!$env_file) {
+    $cwd = getcwd();
+    if (file_exists($cwd . '/tests/.env.testing')) {
+        $env_file = $cwd . '/tests/.env.testing';
+        colored_message("Using .env.testing from current working directory: $env_file\n", 'blue');
+    }
+    // Then try the script directory
+    else if (file_exists(__DIR__ . '/../tests/.env.testing')) {
+        $env_file = __DIR__ . '/../tests/.env.testing';
+        colored_message("Using .env.testing from script's parent directory: $env_file\n", 'blue');
+    }
+    // Finally try one level up from script directory
+    else {
+        $settings_file = dirname(__DIR__);
+        if (file_exists($settings_file . '/tests/.env.testing')) {
+            $env_file = $settings_file . '/tests/.env.testing';
+            colored_message("Using .env.testing from framework directory: $env_file\n", 'blue');
+        } else {
+            colored_message("Warning: Could not find .env.testing file in any expected location\n", 'yellow');
+        }
+    }
+}
+
+// Load the settings
+$env_settings = $env_file ? load_settings_file($env_file) : [];
 $GLOBALS['loaded_settings'] = $env_settings;
 
 
@@ -1118,10 +1148,13 @@ function display_sql_data($data) {
  * @param array $result The result array from execute_mysqli_query()
  */
 function display_sql_result(array $result): void {
+    // Clear visual separator between query and result
+    echo "\n" . str_repeat('▼', 40) . " QUERY RESULT " . str_repeat('▼', 40) . "\n";
+
     if (empty($result['success'])) {
-        echo "❌ ERROR: " . ($result['error'] ?? 'Unknown error') . "\n";
+        colored_message("❌ ERROR: " . ($result['error'] ?? 'Unknown error'), 'red');
         if (!empty($result['error_code'])) {
-            echo "Error code: " . $result['error_code'] . "\n";
+            colored_message("Error code: " . $result['error_code'], 'red');
         }
         return;
     }
@@ -1130,6 +1163,27 @@ function display_sql_result(array $result): void {
     $affected_rows = $meta['affected_rows'] ?? -1;
     $num_rows = $meta['num_rows'] ?? 0;
     $data = $result['data'] ?? [];
+
+    // Display statement-specific information if available
+    if (!empty($meta['statements'])) {
+        colored_message("📋 Statement Summary:", 'cyan');
+        foreach ($meta['statements'] as $idx => $stmt) {
+            $stmt_num = $stmt['index'];
+            $status = $stmt['error'] ? '❌' : '✅';
+            $message = "Statement #{$stmt_num}: {$status} ";
+
+            if ($stmt['error']) {
+                colored_message($message . "Error: {$stmt['error']}", 'red');
+            } else {
+                $message .= "Success";
+                if ($stmt['affected_rows'] > 0) {
+                    $message .= " (Affected rows: {$stmt['affected_rows']})";
+                }
+                colored_message($message, 'green');
+            }
+        }
+        echo "\n";
+    }
 
     // For INSERT/UPDATE/DELETE queries
     if ($affected_rows > 0) {
@@ -2236,11 +2290,40 @@ function execute_mysqli_lando(string $sql, array $db_settings, ?string $db_name 
         );
     }
 
-    // Create a temporary PHP file in the current directory
+    // Create a temporary PHP file using settings paths
     $temp_file = 'temp_mysql_exec_' . uniqid();
-    $temp_php_file = __DIR__ . '/' . $temp_file . '.php';
-    $output_file = __DIR__ . '/' . $temp_file . '.json';
-    $error_file = __DIR__ . '/' . $temp_file . '.error';
+
+    // Get filesystem and container paths from settings
+    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
+    $wp_root = get_setting('WP_ROOT', '');
+    $folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+    $plugin_slug = get_setting('YOUR_PLUGIN_SLUG', '');
+
+    // Get test framework directory from settings
+    $test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
+
+    // Build paths for both filesystem and container
+    $base_dir = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
+    $container_base_dir = $wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
+
+    // Create file paths
+    $temp_php_file = $base_dir . '/' . $temp_file . '.php';
+    $output_file = $base_dir . '/' . $temp_file . '.json';
+    $error_file = $base_dir . '/' . $temp_file . '.error';
+
+    // Create container paths
+    $container_output_file = $container_base_dir . '/' . $temp_file . '.json';
+    $container_error_file = $container_base_dir . '/' . $temp_file . '.error';
+
+    // Display full paths in debug mode
+    if (has_cli_flag(['--debug', '-d']) || has_cli_flag(['--verbose', '-v'])) {
+        echo "\n🔍 DEBUG: Temporary files created:\n";
+        echo "  PHP File: {$temp_php_file}\n";
+        echo "  Output File: {$output_file}\n";
+        echo "  Error File: {$error_file}\n";
+        echo "  Container Output File: {$container_output_file}\n";
+        echo "  Container Error File: {$container_error_file}\n";
+    }
 
         // Escape values for PHP code
         $db_host = addslashes($db_settings['db_host']);
@@ -2274,29 +2357,14 @@ function create_db_response(\$success = true, \$data = null, \$error = null, \$e
     ];
 }
 
-// Function to send JSON response and exit
-function send_json(\$data) {
-    // Clear any output buffers
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    header('Content-Type: application/json');
-
-    // Use additional JSON flags to handle special characters
+// Function to write JSON to a file
+function write_json_to_file(\$data, \$file_path) {
     \$json = json_encode(\$data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_PARTIAL_OUTPUT_ON_ERROR);
-
-    // Check for JSON encoding errors
     if (\$json === false) {
-        // If JSON encoding fails, send a simplified error response
-        echo json_encode([
-            'success' => false,
-            'error' => 'JSON encoding error: ' . json_last_error_msg(),
-            'error_code' => 'json_encoding_failed'
-        ]);
-    } else {
-        echo \$json;
+        \$json = json_encode(['success' => false, 'error' => 'JSON encoding error: ' . json_last_error_msg(), 'error_code' => 'json_encoding_failed']);
     }
-    exit;
+    file_put_contents(\$file_path, \$json);
+    return \$json;
 }
 
 try {
@@ -2318,13 +2386,15 @@ try {
     }
 
     if (\$mysqli->connect_error) {
-        send_json(create_db_response(
+        \$output_file = '$container_output_file';
+        write_json_to_file(create_db_response(
             success: false,
             data: [],
             error: \$mysqli->connect_error,
             error_code: 'connection_failed',
             meta: ['exception' => true]
-        ));
+        ), \$output_file);
+        throw new Exception('Connection failed: ' . \$mysqli->connect_error, 1);
     }
 
     // Connection error already checked above
@@ -2358,17 +2428,56 @@ try {
     ];
     \$data = [];
 
-    // Process all result sets
+    // Process all result sets with improved error handling and debugging
+    \$statement_count = 0;
+    // IMPORTANT: Debug output must be disabled by default in the generated PHP code
+    // Any direct output (echo statements) will corrupt the JSON response
+    // This causes 'headers already sent' warnings and makes the JSON invalid
+    // Only enable for local debugging, never in production
+    \$debug_enabled = false; // Set to false to prevent corrupting JSON output
+
+    // Parse SQL statements for debugging
+    \$debug_parsed_statements = [];
+    if (\$debug_enabled) {
+        // Try to split the SQL into individual statements for debugging
+        \$temp_sql = trim(\$sql);
+        if (!empty(\$temp_sql)) {
+            // Simple split by semicolon - not perfect but helps for debugging
+            \$debug_parsed_statements = array_filter(array_map('trim', explode(';', \$temp_sql)));
+            echo "\n[DEBUG] Parsed " . count(\$debug_parsed_statements) . " SQL statements for execution\n";
+            foreach (\$debug_parsed_statements as \$idx => \$stmt) {
+                echo "[DEBUG] Statement #" . (\$idx + 1) . ": " . substr(\$stmt, 0, 100) . (strlen(\$stmt) > 100 ? "..." : "") . "\n";
+            }
+        }
+    }
+
     do {
+        \$statement_count++;
+        if (\$debug_enabled) {
+            echo "\n[DEBUG] Processing statement #\$statement_count\n";
+        }
+
         if (\$result = \$mysqli->store_result()) {
             while (\$row = \$result->fetch_assoc()) {
                 \$data[] = \$row;
             }
             \$meta['num_rows'] = \$result->num_rows;
+            if (\$debug_enabled) {
+                echo "[DEBUG] Statement #\$statement_count completed successfully with {\$meta['num_rows']} rows\n";
+            }
             \$result->free();
         } elseif (\$mysqli->errno) {
             // Capture errors that occur during result processing
-            throw new Exception('Query failed: ' . \$mysqli->error, 2);
+            \$error_msg = "Query failed in statement #\$statement_count: {\$mysqli->error}";
+            if (\$debug_enabled) {
+                echo "[DEBUG] ERROR: \$error_msg\n";
+            }
+            throw new Exception(\$error_msg, 2);
+        } else {
+            // No result set but also no error (e.g., for INSERT, UPDATE, etc.)
+            if (\$debug_enabled) {
+                echo "[DEBUG] Statement #\$statement_count executed with no result set (affected rows: {\$mysqli->affected_rows})\n";
+            }
         }
     } while (\$mysqli->more_results() && \$mysqli->next_result());
 
@@ -2386,13 +2495,15 @@ try {
 
     // Don't close the connection manually - let the manager handle it
     // \$mysqli->close();
-    send_json(create_db_response(
+    // Write JSON response to the output file
+    \$output_file = '$container_output_file';
+    \$result = write_json_to_file(create_db_response(
         success: true,
         data: \$data,
         error: null,
         error_code: null,
         meta: \$meta
-    ));
+    ), \$output_file);
 
 } catch (Exception \$e) {
     \$error_code = match(\$e->getCode()) {
@@ -2400,20 +2511,22 @@ try {
         2 => 'query_failed',
         default => 'unknown_error'
     };
-    send_json(create_db_response(
+    // Write error JSON response to the output file
+    \$output_file = '$container_output_file';
+    \$result = write_json_to_file(create_db_response(
         success: false,
         data: [],
         error: \$e->getMessage(),
         error_code: \$error_code,
         meta: ['exception' => true]
-    ));
+    ), \$output_file);
 }
 ?>
 EOD;
 
         // Write the PHP code to the temporary file
         if (file_put_contents($temp_php_file, $php_code) === false) {
-            throw new \RuntimeException('Failed to create temporary PHP file', 0, null, 'file_error');
+            throw new \RuntimeException('Failed to create temporary PHP file', 100, null);
         }
 
         // Debug output for generated PHP code (only shown with both --debug and --verbose flags)
@@ -2442,12 +2555,13 @@ EOD;
         }
 
         // Execute the PHP file using Lando
+        // No need to redirect stdout since we're writing directly to the output file
+        // We still redirect stderr to capture any PHP errors
         $command = sprintf(
-            'cd %s && lando php -d display_errors=0 -d log_errors=0 %s 2> %s > %s',
+            'cd %s && lando php -d display_errors=0 -d log_errors=0 %s 2> %s',
             escapeshellarg(__DIR__),
             escapeshellarg(basename($temp_php_file)),
-            escapeshellarg(basename($error_file)),
-            escapeshellarg(basename($output_file))
+            escapeshellarg(basename($error_file))
         );
 
         exec($command, $output, $return_var);
@@ -2455,7 +2569,7 @@ EOD;
         // Read and decode the JSON response
         if (!file_exists($output_file)) {
             $error = file_exists($error_file) ? file_get_contents($error_file) : 'No output file was created';
-            throw new \RuntimeException("Failed to execute Lando PHP command: " . $error, 0, null, 'file_error');
+            throw new \RuntimeException("Failed to execute Lando PHP command: " . $error, 100, null);
         }
 
         $json = file_get_contents($output_file);
@@ -2494,11 +2608,18 @@ EOD;
             $e->getCode() ?: 'unknown_error'
         );
     } finally {
-        // Clean up temporary files
-        foreach ([$temp_php_file, $output_file, $error_file] as $file) {
-            if ($file && file_exists($file)) {
-                @unlink($file);
+        // Clean up temporary files (unless in debug mode)
+        if (!has_cli_flag(['--debug', '-d'])) {
+            foreach ([$temp_php_file, $output_file, $error_file] as $file) {
+                if ($file && file_exists($file)) {
+                    @unlink($file);
+                }
             }
+        } else {
+            echo "\n🔍 DEBUG: Temporary files preserved for debugging:\n";
+            echo "  PHP File: {$temp_php_file}\n";
+            echo "  Output File: {$output_file}\n";
+            echo "  Error File: {$error_file}\n";
         }
     }
 }
@@ -2558,38 +2679,97 @@ function execute_mysqli_direct(string $host, string $user, string $pass, string 
         }
 
         if ($mysqli->connect_error) {
-            throw new \RuntimeException('Connection failed: ' . $mysqli->connect_error, 1, null, 'connect_failed');
+            throw new \RuntimeException('Connection failed: ' . $mysqli->connect_error, 1, null);
         }
 
         $mysqli->set_charset('utf8mb4');
         $result = $mysqli->multi_query($sql);
 
         if ($result === false) {
-            throw new \RuntimeException('Query failed: ' . $mysqli->error, 2, null, 'query_failed');
+            throw new \RuntimeException('Query failed: ' . $mysqli->error, 2, null);
         }
 
         $meta = [
             'insert_id' => $mysqli->insert_id,
             'affected_rows' => $mysqli->affected_rows,
             'num_rows' => 0,
-            'warnings' => []
+            'warnings' => [],
+            'statements' => [] // Track individual statement results
         ];
 
         $data = [];
 
         // Process all result sets
+        $statement_count = 0;
+        $has_error = false;
+        $debug = has_cli_flag(['--debug', '-d', '--verbose', '-v']);
+
         do {
+            $statement_count++;
+
+            // Debug output for each statement execution
+            if ($debug) {
+                colored_message("\n▶ Executing statement #$statement_count", 'yellow');
+            }
+
+            // Check for errors after each statement
+            if ($mysqli->error) {
+                $has_error = true;
+                $error_message = 'Query failed in statement #' . $statement_count . ': ' . $mysqli->error;
+
+                if ($debug) {
+                    colored_message("\n❌ ERROR: $error_message", 'red');
+                }
+
+                throw new \RuntimeException($error_message, 2, null);
+            }
+
+            // Process result set if available
             if ($result = $mysqli->store_result()) {
                 while ($row = $result->fetch_assoc()) {
                     $data[] = $row;
                 }
                 $meta['num_rows'] = $result->num_rows;
-                $result->free();
-            }
-        } while ($mysqli->more_results() && $mysqli->next_result());
 
-        if ($mysqli->error) {
-            throw new \RuntimeException('Query failed: ' . $mysqli->error, 2, null, 'query_failed');
+                // Debug output for successful result set
+                if ($debug) {
+                    colored_message("  ✅ Result set with {$result->num_rows} row(s)", 'green');
+                }
+
+                $result->free();
+            } else if ($mysqli->affected_rows > 0 && $debug) {
+                // Debug output for statements with affected rows but no result set
+                colored_message("  ✅ Statement affected {$mysqli->affected_rows} row(s)", 'green');
+            } else if ($debug) {
+                // Debug output for statements with no result set and no affected rows
+                colored_message("  ✅ Statement executed successfully", 'green');
+            }
+
+            // Store statement-specific metadata
+            $meta['statements'][] = [
+                'index' => $statement_count,
+                'affected_rows' => $mysqli->affected_rows,
+                'insert_id' => $mysqli->insert_id,
+                'error' => $mysqli->error ?: null,
+                'statement_type' => $mysqli->field_count ? 'query' : 'non-query'
+            ];
+
+        } while (!$has_error && $mysqli->more_results() && $mysqli->next_result());
+
+        // Final error check after all statements
+        if ($mysqli->error && !$has_error) {
+            $error_message = 'Query failed after processing: ' . $mysqli->error;
+
+            if ($debug) {
+                colored_message("\n❌ FINAL ERROR: $error_message", 'red');
+            }
+
+            throw new \RuntimeException($error_message, 2, null);
+        }
+
+        // Debug summary of all statements
+        if ($debug) {
+            colored_message("\n📋 Processed $statement_count statement(s) in total", 'cyan');
         }
 
         // Don't close the connection manually - let the connection manager handle it
@@ -2812,7 +2992,8 @@ function debug_sql(string $sql, array $params, ?array $result = null): void {
     $query_count++;
 
     echo "\n" . str_repeat('=', 80) . "\n";
-    echo "SQL DEBUG #$query_count - " . ($result ? 'RESULT' : 'QUERY') . "\n";
+    colored_message("SQL DEBUG #$query_count - " . ($result ? 'RESULT' : 'QUERY'), 'cyan');
+    echo str_repeat('-', 80) . "\n";
 
     if (!$result) {
         // Start of query
