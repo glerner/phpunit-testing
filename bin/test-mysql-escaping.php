@@ -9,6 +9,9 @@ use WP_PHPUnit_Framework\Service\Database_Connection_Manager;
 // Instantiate the singleton Database_Connection_Manager
 $db_manager = Database_Connection_Manager::get_instance();
 
+// Global counter for query identification
+$query_counter = 0;
+
 /**
  * Test MySQL command execution and display results with various quoting styles
  *
@@ -1147,12 +1150,15 @@ function display_sql_data($data) {
  *
  * @param array $result The result array from execute_mysqli_query()
  */
-function display_sql_result(array $result): void {
-    // Clear visual separator between query and result
-    echo "\n" . str_repeat('▼', 40) . " QUERY RESULT " . str_repeat('▼', 40) . "\n";
+function display_sql_result(array $result, ?int $query_id = null): void {
+    // Get query ID from parameter or result array
+    $query_id = $query_id ?? ($result['query_id'] ?? null);
+    $query_id_display = $query_id ? "[Q-{$query_id}] " : "";
+    // Clear visual separator between query and result with query ID
+    echo "\n" . str_repeat('▼', 40) . " QUERY RESULT {$query_id_display}" . str_repeat('▼', 40) . "\n";
 
     if (empty($result['success'])) {
-        colored_message("❌ ERROR: " . ($result['error'] ?? 'Unknown error'), 'red');
+        colored_message("{$query_id_display}❌ ERROR: " . ($result['error'] ?? 'Unknown error'), 'red');
         if (!empty($result['error_code'])) {
             colored_message("Error code: " . $result['error_code'], 'red');
         }
@@ -1171,6 +1177,12 @@ function display_sql_result(array $result): void {
             $stmt_num = $stmt['index'];
             $status = $stmt['error'] ? '❌' : '✅';
             $message = "Statement #{$stmt_num}: {$status} ";
+
+            // Check if there was a MySQL error but don't display it yet
+            // We'll return it with the result so it can be displayed with the test results
+            if (isset($result['error']) && !empty($result['error'])) {
+                $success = false;
+            }
 
             if ($stmt['error']) {
                 colored_message($message . "Error: {$stmt['error']}", 'red');
@@ -1193,7 +1205,7 @@ function display_sql_result(array $result): void {
     // For SELECT queries
     if ($num_rows > 0) {
         $display_count = min(10, $num_rows);
-        echo "📊 Rows returned: $num_rows\n\n";
+        echo "{$query_id_display}📊 Rows returned: $num_rows\n\n";
 
         if ($num_rows === 1) {
             // Single row result - show as key: value pairs
@@ -1240,7 +1252,7 @@ function display_sql_result(array $result): void {
             }
         }
     } elseif ($num_rows === 0) {
-        echo "ℹ️  No rows returned\n";
+        echo "{$query_id_display}ℹ️  No rows returned\n";
     }
 }
 
@@ -1390,11 +1402,15 @@ function cleanup_test_environment() {
 // Verify and clean up after each test
 function verify_and_cleanup($test_name, $cleanup = false) {
     echo "\n" . str_repeat("=", 80) . "\n";
+    echo "\n" . str_repeat("▓", 80) . "\n";
     colored_message("VERIFICATION: $test_name", 'yellow');
+    echo str_repeat("▓", 80) . "\n";
 
     // List test databases with details
     $db_check = execute_mysqli_query(sql: "SHOW DATABASES LIKE 'wordpress_test%'; ", db_name: 'none');
+    echo "\n" . str_repeat("─", 80) . "\n";
     colored_message("DATABASE STATUS", 'cyan');
+    echo str_repeat("─", 80) . "\n";
 
     if (!empty($db_check['data'])) {
         foreach ($db_check['data'] as $db) {
@@ -1421,28 +1437,31 @@ function verify_and_cleanup($test_name, $cleanup = false) {
     }
 
     // Check for test users with database-level permissions
+    // The information_schema.SCHEMA_PRIVILEGES table requires proper case column names (User, Host, etc.) rather than all uppercase or lowercase.
     $users_check = execute_mysqli_query("
         SELECT
-            user,
-            host,
+            User,
+            Host,
             GROUP_CONCAT(DISTINCT CONCAT(
-                privilege_type,
+                PRIVILEGE_TYPE,
                 ' ON ',
-                table_schema,
-                IF(table_name IS NOT NULL, CONCAT('.', table_name), '')
-            ) ORDER BY privilege_type SEPARATOR ', ') as privileges
+                TABLE_SCHEMA,
+                IF(TABLE_NAME IS NOT NULL, CONCAT('.', TABLE_NAME), '')
+            ) ORDER BY PRIVILEGE_TYPE SEPARATOR ', ') as privileges
         FROM information_schema.SCHEMA_PRIVILEGES
-        WHERE user IN ('test_user', 'test_helper_user')
-        GROUP BY user, host", db_name: 'none');
+        WHERE User IN ('test_user', 'test_helper_user')
+        GROUP BY User, Host", db_name: 'none');
 
     echo "\n";
+    echo "\n" . str_repeat("─", 80) . "\n";
     colored_message("USER PERMISSIONS", 'cyan');
+    echo str_repeat("─", 80) . "\n";
     echo str_repeat("-", 80) . "\n";
 
     if (!empty($users_check['data'])) {
         foreach ($users_check['data'] as $user) {
-            $user_name = $user['user'] ?? '';
-            $host = $user['host'] ?? '';
+            $user_name = $user['USER'] ?? '';
+            $host = $user['HOST'] ?? '';
             $privs = $user['privileges'] ?? 'No specific privileges';
 
             echo "- User: ";
@@ -1456,7 +1475,9 @@ function verify_and_cleanup($test_name, $cleanup = false) {
     // Clean up test users if cleanup is enabled
     if ($cleanup) {
         echo "\n";
+        echo "\n" . str_repeat("─", 80) . "\n";
         colored_message("CLEANING UP TEST USERS...", 'yellow');
+        echo str_repeat("─", 80) . "\n";
 
         $users_to_drop = [
             ["'test_user'@'%'", "Test User"],
@@ -1520,13 +1541,13 @@ function execute_multi_sql($sql_commands, $database = null, $use_root = false) {
 
         $results[] = $result;
 
-        // Debug output
-        echo "\n[DEBUG] Executed: $full_command\n";
-        echo "Status: " . ($result['success'] ? 'SUCCESS' : 'FAILED') . "\n";
-        if (isset($result['error'])) {
-            echo "Error: " . $result['error'] . "\n";
+        // Only show command execution in debug mode, but don't show errors yet
+        // Errors will be displayed with test results
+        if (has_cli_flag(['--debug', '-d'])) {
+            echo "\n[DEBUG] Executed: $full_command\n";
+            echo "Status: " . ($result['success'] ? 'SUCCESS' : 'FAILED') . "\n";
+            echo "----------------------------------------\n";
         }
-        echo "----------------------------------------\n";
     }
 
     return $results;
@@ -1783,6 +1804,85 @@ function check_database_connection() {
     return true;
 }
 
+// Track whether environment info has been displayed
+$environment_info_displayed = false;
+
+/**
+ * Display environment information once
+ *
+ * @param array $db_settings Database settings array
+ * @return void
+ */
+function display_environment_info(array $db_settings): void {
+    global $environment_info_displayed;
+
+    // Only display environment info once
+    if ($environment_info_displayed) {
+        return;
+    }
+
+    // Display environment information header
+    echo "\n" . str_repeat("═", 80) . "\n";
+    colored_message("ENVIRONMENT INFORMATION", 'green');
+    echo str_repeat("═", 80) . "\n";
+    colored_message("Environment:    " . (is_lando_environment() ? 'Lando' : 'Local'), 'cyan');
+    colored_message("Database Host:  " . ($db_settings['db_host'] ?? 'Not set'), 'cyan');
+    colored_message("Database Name:  " . ($db_settings['db_name'] ?? 'Not set'), 'cyan');
+    colored_message("Database User:  " . ($db_settings['db_user'] ?? 'Not set'), 'cyan');
+    colored_message("Lando Detected: " . (is_lando_environment() ? 'Yes' : 'No'), 'cyan');
+
+    // Display filesystem paths only once
+    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '[not set]');
+    $wp_root = get_setting('WP_ROOT', '[not set]');
+    $folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+    $plugin_slug = get_setting('YOUR_PLUGIN_SLUG', '[not set]');
+
+    colored_message("Filesystem WP Root: " . $filesystem_wp_root, 'cyan');
+    colored_message("WP Root:           " . $wp_root, 'cyan');
+    colored_message("Plugin Location:   " . $folder_in_wordpress . '/' . $plugin_slug, 'cyan');
+    colored_message(str_repeat("=", 80) . "\n", 'cyan');
+
+    // Mark as displayed
+    $environment_info_displayed = true;
+}
+
+/**
+ * Generate temporary file paths for MySQL query execution
+ *
+ * @param string $temp_file_prefix Optional prefix for the temp file name
+ * @return array Array containing all necessary file paths in a nested structure
+ */
+function get_temp_file_paths(string $temp_file_prefix = 'temp_mysql_exec_'): array {
+    // Create a unique identifier for this test run
+    $temp_file = $temp_file_prefix . uniqid();
+
+    // Get filesystem and container paths from settings
+    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
+    $wp_root = get_setting('WP_ROOT', '');
+    $folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
+    $plugin_slug = get_setting('YOUR_PLUGIN_SLUG', '');
+    $test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
+
+    // Build paths for both filesystem and container
+    $base_dir = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
+    $container_base_dir = $wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
+
+    return [
+        'filesystem' => [
+            'php' => $base_dir . '/' . $temp_file . '.php',
+            'output' => $base_dir . '/' . $temp_file . '.json',
+            'error' => $base_dir . '/' . $temp_file . '.error',
+            'base_dir' => $base_dir,
+        ],
+        'container' => [
+            'output' => $container_base_dir . '/' . $temp_file . '.json',
+            'error' => $container_base_dir . '/' . $temp_file . '.error',
+            'base_dir' => $container_base_dir,
+        ],
+        'temp_file' => $temp_file,
+    ];
+}
+
 // Main test runner
 /**
  * Run a series of MySQL tests with improved reporting
@@ -1792,16 +1892,8 @@ function run_mysql_tests() {
 
     $test_results = [];
 
-    // Display test header
-    colored_message("\n" . str_repeat("=", 80), 'cyan');
-    colored_message("ENVIRONMENT INFORMATION", 'cyan');
-    colored_message("=" . str_repeat("=", 79), 'cyan');
-    colored_message("Environment:    " . (is_lando_environment() ? 'Lando' : 'Local'), 'cyan');
-    colored_message("Database Host:  " . ($db_settings['db_host'] ?? 'Not set'), 'cyan');
-    colored_message("Database Name:  " . ($db_settings['db_name'] ?? 'Not set'), 'cyan');
-    colored_message("Database User:  " . ($db_settings['db_user'] ?? 'Not set'), 'cyan');
-    colored_message("Lando Detected: " . (is_lando_environment() ? 'Yes' : 'No'), 'cyan');
-    colored_message(str_repeat("=", 80) . "\n", 'cyan');
+    // Display environment information using the centralized function
+    display_environment_info($db_settings);
 
     // Check database connection first
     if (!check_database_connection()) {
@@ -1811,7 +1903,9 @@ function run_mysql_tests() {
     }
 
     // Set up test database using our new function
-    colored_message("\nSetting up test database 'wordpress_test' \n", 'cyan');
+    echo "\n" . str_repeat("─", 80) . "\n";
+    colored_message("SETTING UP TEST DATABASE 'wordpress_test'", 'cyan');
+    echo str_repeat("─", 80) . "\n";
     $setup_result = setup_test_database('wordpress_test');
 
     if (!$setup_result['success']) {
@@ -1829,8 +1923,9 @@ function run_mysql_tests() {
 
     // Show available databases
     $database_count = count($result['data'] ?? []);
-    colored_message("\n📊 Available MySQL databases after Creating Test Database wordpress_test:", 'cyan');
-    colored_message(str_repeat("-", 80), 'cyan');
+    echo "\n" . str_repeat("─", 80) . "\n";
+    colored_message("📊 AVAILABLE MYSQL DATABASES", 'cyan');
+    echo str_repeat("─", 80) . "\n";
     if ($database_count > 0) {
         foreach ($result['data'] as $db) {
             $db_name = $db['Database'] ?? 'unknown';
@@ -1980,44 +2075,12 @@ function run_mysql_tests() {
             'error_contains' => ['DROP command denied', 'Access denied'],
             'description' => 'Verifies that restricted operations fail with appropriate errors.'
         ],
-        [
-            'name' => '5. SQL Injection Protection',
-            'database' => 'wordpress_test',
-            'sql' => "
-                -- Test SQL injection attempt with CHAR() to avoid quote issues
-                SET @malicious = CONCAT('test', CHAR(39), ' OR ', CHAR(39), '1', CHAR(39), '=', CHAR(39), '1');
+        // Test case removed: '5. SQL Injection Protection' using MySQL's native PREPARE/EXECUTE syntax
+        // This test was removed because it was unreliable due to session state issues with MySQL's native prepared statements
+        // A more comprehensive test using PHP's mysqli prepared statement API has been added at the end of this file
+        // See the run_prepared_statement_test() function for the new implementation
+        
 
-                -- Test with malicious input using prepared statement
-                SET @query = CONCAT('SELECT * FROM `test_operations` WHERE name = ', @malicious);
-                PREPARE stmt FROM @query;
-                EXECUTE stmt;
-                DEALLOCATE PREPARE stmt;
-            ",
-            'expected' => false,
-            'expect_error' => true,
-            'error_contains' => ['SQL syntax', 'syntax error'],
-            'description' => 'Verifies that SQL injection attempts are properly handled.'
-        ],
-        [
-            'name' => '5.5. Safe Prepared Statement Usage',
-            'database' => 'wordpress_test',
-            'sql' => "
-                -- Create test data first to ensure it exists
-                INSERT INTO `test_operations` (name, email, operation_type)
-                VALUES ('Test User', 'test@example.com', 'prepared_test')
-                ON DUPLICATE KEY UPDATE operation_type = 'prepared_test';
-
-                -- Test safe prepared statement with parameter in a single transaction
-                START TRANSACTION;
-                PREPARE safe_stmt FROM 'SELECT * FROM `test_operations` WHERE name = ?';
-                SET @safe_param = 'Test User';
-                EXECUTE safe_stmt USING @safe_param;
-                DEALLOCATE PREPARE safe_stmt;
-                COMMIT;
-            ",
-            'expected' => true,
-            'description' => 'Verifies that prepared statements work correctly with parameters.'
-        ],
         [
             'name' => '6. Error Handling',
             'database' => 'wordpress_test',
@@ -2077,7 +2140,9 @@ function run_mysql_tests() {
         if ($test_num <= 2) {
             if ($current_group !== 'env_setup') {
                 $current_group = 'env_setup';
-                colored_message("\n=== GROUP $group_num: Environment Setup ===\n", 'yellow');
+                echo "\n" . str_repeat("═", 80) . "\n";
+                colored_message("GROUP $group_num: ENVIRONMENT SETUP", 'green');
+                echo str_repeat("═", 80) . "\n";
                 $group_num++;
             }
         }
@@ -2085,7 +2150,9 @@ function run_mysql_tests() {
         elseif ($test_num <= 4) {
             if ($current_group !== 'user_mgmt') {
                 $current_group = 'user_mgmt';
-                colored_message("\n=== GROUP $group_num: User Management ===\n", 'yellow');
+                echo "\n" . str_repeat("═", 80) . "\n";
+                colored_message("GROUP $group_num: USER MANAGEMENT", 'green');
+                echo str_repeat("═", 80) . "\n";
                 $group_num++;
             }
         }
@@ -2101,13 +2168,17 @@ function run_mysql_tests() {
         else {
             if ($current_group !== 'data_handling') {
                 $current_group = 'data_handling';
-                colored_message("\n=== GROUP $group_num: Data Handling ===\n", 'yellow');
+                echo "\n" . str_repeat("═", 80) . "\n";
+                colored_message("GROUP $group_num: DATA HANDLING", 'green');
+                echo str_repeat("═", 80) . "\n";
             }
         }
 
-        echo "\n" . str_repeat("=", 80) . "\n";
+        // Create a visually distinct test header with consistent formatting
+        echo "\n" . str_repeat("▓", 80) . "\n";
         colored_message("TEST {$test_num}/{$total_tests}: {$test['name']}", 'yellow');
-        echo str_repeat("=", 80) . "\n\n";
+        colored_message("Description: {$test['description']}", 'cyan');
+        echo str_repeat("▓", 80) . "\n";
 
         // Display test SQL with syntax highlighting
         echo "🔍 Testing SQL:\n";
@@ -2163,8 +2234,53 @@ function run_mysql_tests() {
             colored_message("✅ TEST {$test_num} PASSED: {$test['name']}", 'green');
         } else {
             colored_message("❌ TEST {$test_num} FAILED: {$test['name']}", 'red');
+
+            // Display error message immediately after the test result
             if ($error_message) {
                 colored_message("   Error: {$error_message}", 'red');
+            }
+
+            // Display detailed MySQL errors if available
+            if (isset($results) && is_array($results)) {
+                foreach ($results as $idx => $result) {
+                    // Display MySQL errors
+                    if (isset($result['error']) && !empty($result['error'])) {
+                        $cmd_num = $idx + 1;
+                        colored_message("   MySQL Error in command #{$cmd_num}: {$result['error']}", 'red');
+                    }
+
+                    // Display PHP execution errors if available
+                    if (isset($result['meta']['php_error']) && !empty($result['meta']['php_error'])) {
+                        $cmd_num = $idx + 1;
+                        colored_message("   PHP Error in command #{$cmd_num}:", 'red');
+                        foreach (explode("\n", $result['meta']['php_error']) as $line) {
+                            if (trim($line)) {
+                                colored_message("     $line", 'red');
+                            }
+                        }
+                    }
+
+                    // Display command execution errors if available
+                    if (isset($result['meta']['command_error']) && !empty($result['meta']['command_error'])) {
+                        $cmd_num = $idx + 1;
+                        colored_message("   Command Execution Error in command #{$cmd_num}:", 'red');
+                        colored_message("     {$result['meta']['command_error']}", 'red');
+                        if (isset($result['meta']['return_code'])) {
+                            colored_message("     Exit code: {$result['meta']['return_code']}", 'red');
+                        }
+                    }
+
+                    // Display JSON parsing errors if available
+                    if (isset($result['error_code']) && $result['error_code'] === 'json_parse_error') {
+                        $cmd_num = $idx + 1;
+                        colored_message("   JSON Parsing Error in command #{$cmd_num}:", 'red');
+                        colored_message("     {$result['error']}", 'red');
+                        if (has_cli_flag(['--debug', '-d'])) {
+                            colored_message("     Raw JSON (first 100 chars):", 'red');
+                            colored_message("     " . substr($result['meta']['raw_json'] ?? '', 0, 100) . "...", 'red');
+                        }
+                    }
+                }
             }
         }
 
@@ -2290,39 +2406,34 @@ function execute_mysqli_lando(string $sql, array $db_settings, ?string $db_name 
         );
     }
 
-    // Create a temporary PHP file using settings paths
-    $temp_file = 'temp_mysql_exec_' . uniqid();
+    // Get temporary file paths using the centralized function
+    $file_paths = get_temp_file_paths('temp_mysql_exec_');
 
-    // Get filesystem and container paths from settings
-    $filesystem_wp_root = get_setting('FILESYSTEM_WP_ROOT', '');
-    $wp_root = get_setting('WP_ROOT', '');
-    $folder_in_wordpress = get_setting('FOLDER_IN_WORDPRESS', 'wp-content/plugins');
-    $plugin_slug = get_setting('YOUR_PLUGIN_SLUG', '');
+    // Extract file paths
+    $temp_php_file = $file_paths['filesystem']['php'];
+    $output_file = $file_paths['filesystem']['output'];
+    $error_file = $file_paths['filesystem']['error'];
+    $container_output_file = $file_paths['container']['output'];
+    $container_error_file = $file_paths['container']['error'];
+    $temp_file = $file_paths['temp_file']; // Store the temp file base name for reference
 
-    // Get test framework directory from settings
-    $test_framework_dir = get_setting('TEST_FRAMEWORK_DIR', 'gl-phpunit-test-framework');
-
-    // Build paths for both filesystem and container
-    $base_dir = $filesystem_wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
-    $container_base_dir = $wp_root . '/' . $folder_in_wordpress . '/' . $plugin_slug . '/tests/' . $test_framework_dir . '/bin';
-
-    // Create file paths
-    $temp_php_file = $base_dir . '/' . $temp_file . '.php';
-    $output_file = $base_dir . '/' . $temp_file . '.json';
-    $error_file = $base_dir . '/' . $temp_file . '.error';
-
-    // Create container paths
-    $container_output_file = $container_base_dir . '/' . $temp_file . '.json';
-    $container_error_file = $container_base_dir . '/' . $temp_file . '.error';
-
-    // Display full paths in debug mode
+    // Display file paths in debug mode
     if (has_cli_flag(['--debug', '-d']) || has_cli_flag(['--verbose', '-v'])) {
         echo "\n🔍 DEBUG: Temporary files created:\n";
-        echo "  PHP File: {$temp_php_file}\n";
-        echo "  Output File: {$output_file}\n";
-        echo "  Error File: {$error_file}\n";
-        echo "  Container Output File: {$container_output_file}\n";
-        echo "  Container Error File: {$container_error_file}\n";
+
+        // Show full paths only in debug mode, otherwise just show filenames
+        if (has_cli_flag(['--debug', '-d'])) {
+            echo "  PHP File: {$temp_php_file}\n";
+            echo "  Output File: {$output_file}\n";
+            echo "  Error File: {$error_file}\n";
+            echo "  Container Output File: {$container_output_file}\n";
+            echo "  Container Error File: {$container_error_file}\n";
+        } else {
+            echo "  PHP File: " . basename($temp_php_file) . "\n";
+            echo "  Output File: " . basename($output_file) . "\n";
+            echo "  Error File: " . basename($error_file) . "\n";
+            echo "  (Use --debug flag to see full paths)\n";
+        }
     }
 
         // Escape values for PHP code
@@ -2569,7 +2680,14 @@ EOD;
         // Read and decode the JSON response
         if (!file_exists($output_file)) {
             $error = file_exists($error_file) ? file_get_contents($error_file) : 'No output file was created';
-            throw new \RuntimeException("Failed to execute Lando PHP command: " . $error, 100, null);
+            // Don't throw an exception, return a structured error response
+            return create_db_response(
+                false,
+                null,
+                "Failed to execute Lando PHP command",
+                'command_execution_error',
+                ['command_error' => $error, 'return_code' => $return_var]
+            );
         }
 
         $json = file_get_contents($output_file);
@@ -2589,7 +2707,15 @@ EOD;
 
         $decoded = json_decode($json, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \RuntimeException("Invalid JSON response from Lando: " . json_last_error_msg(), 0);
+            // Don't throw an exception, just return a structured error response
+            // This will be displayed with the test results
+            return create_db_response(
+                false,
+                null,
+                "Invalid JSON response from Lando: " . json_last_error_msg(),
+                'json_parse_error',
+                ['raw_json' => $json]
+            );
         }
 
         return $decoded;
@@ -2598,14 +2724,17 @@ EOD;
         // If we have an error file, include its contents in the error message
         $error_details = '';
         if (file_exists($error_file)) {
-            $error_details = "\nError details: " . file_get_contents($error_file);
+            $error_details = file_get_contents($error_file);
         }
 
+        // Don't display the error immediately - just capture it in the response
+        // It will be displayed with the test results
         return create_db_response(
             false,
             null,
-            $e->getMessage() . $error_details,
-            $e->getCode() ?: 'unknown_error'
+            $e->getMessage(),
+            $e->getCode() ?: 'unknown_error',
+            ['php_error' => $error_details] // Store PHP error separately for better formatting
         );
     } finally {
         // Clean up temporary files (unless in debug mode)
@@ -2616,10 +2745,20 @@ EOD;
                 }
             }
         } else {
+            // Use more concise debug output that only shows filenames, not full paths
             echo "\n🔍 DEBUG: Temporary files preserved for debugging:\n";
-            echo "  PHP File: {$temp_php_file}\n";
-            echo "  Output File: {$output_file}\n";
-            echo "  Error File: {$error_file}\n";
+
+            // Show full paths only in debug mode with verbose flag, otherwise just show filenames
+            if (has_cli_flag(['--debug', '-d']) && has_cli_flag(['--verbose', '-v'])) {
+                echo "  PHP File: {$temp_php_file}\n";
+                echo "  Output File: {$output_file}\n";
+                echo "  Error File: {$error_file}\n";
+            } else {
+                echo "  PHP File: " . basename($temp_php_file) . "\n";
+                echo "  Output File: " . basename($output_file) . "\n";
+                echo "  Error File: " . basename($error_file) . "\n";
+                echo "  (Use --debug --verbose flags to see full paths)\n";
+            }
         }
     }
 }
@@ -2789,6 +2928,439 @@ function execute_mysqli_direct(string $host, string $user, string $pass, string 
             $e->getMessage(),
             $e->getCode() ?: 'unknown_error'
         );
+    }
+}
+
+/**
+ * Execute a MySQL prepared statement with direct connection
+ *
+ * @param string $host Database host
+ * @param string $user Database username
+ * @param string $pass Database password
+ * @param string $query SQL query with placeholders
+ * @param array $params Array of parameter values
+ * @param array $types Array of parameter types ('s' for string, 'i' for integer, 'd' for double, 'b' for blob)
+ * @param string|null $db_name Optional database name
+ * @return array Standardized response array with success/error information
+ */
+function execute_mysqli_prepared_statement_direct(string $host, string $user, string $pass, string $query, array $params, array $types, ?string $db_name = null): array {
+    global $db_settings, $db_manager;
+
+    // Determine which database to use based on the provided parameters
+    switch (true) {
+        case $db_name === 'none':
+            $db_name = null;  // Explicitly don't use any database
+            break;
+        case $db_name === null:
+            $db_name = $db_settings['db_name'] ?? '';  // Fall back to WordPress settings
+            break;
+        // else use the provided $db_name as-is
+    }
+
+    // Validate database name if provided
+    if (!empty($db_name) && !is_valid_identifier($db_name)) {
+        return create_db_response(
+            false,
+            null,
+            "Invalid database name: " . htmlspecialchars($db_name, ENT_QUOTES, 'UTF-8'),
+            'invalid_db_name'
+        );
+    }
+
+    // Use Database_Connection_Manager to get a connection
+    try {
+        // Using Database_Connection_Manager for pooled connections
+        try {
+            $mysqli = $db_manager->get_connection($host, $user, $pass, $db_name);
+        } catch (\RuntimeException $e) {
+            return create_db_response(
+                false,
+                null,
+                $e->getMessage(),
+                'connection_failed',
+                ['exception' => true]
+            );
+        }
+
+        if ($mysqli->connect_error) {
+            throw new \RuntimeException('Connection failed: ' . $mysqli->connect_error, 1, null);
+        }
+
+        $mysqli->set_charset('utf8mb4');
+        
+        // Prepare the statement
+        $stmt = $mysqli->prepare($query);
+        if ($stmt === false) {
+            throw new \RuntimeException('Prepare failed: ' . $mysqli->error, 2, null);
+        }
+        
+        // Create the type string from the types array
+        $type_string = implode('', $types);
+        
+        // Bind parameters
+        if (!empty($params)) {
+            // Create reference array for bind_param
+            $bind_params = array($type_string);
+            for ($i = 0; $i < count($params); $i++) {
+                $bind_params[] = &$params[$i];
+            }
+            
+            // Call bind_param with dynamic parameters
+            call_user_func_array(array($stmt, 'bind_param'), $bind_params);
+        }
+        
+        // Execute the statement
+        $result = $stmt->execute();
+        
+        if ($result === false) {
+            throw new \RuntimeException('Execute failed: ' . $stmt->error, 2, null);
+        }
+        
+        // Get the result
+        $result_set = $stmt->get_result();
+        
+        $meta = [
+            'insert_id' => $mysqli->insert_id,
+            'affected_rows' => $stmt->affected_rows,
+            'num_rows' => $result_set ? $result_set->num_rows : 0,
+            'warnings' => []
+        ];
+        
+        $data = [];
+        
+        // Process result set if available
+        if ($result_set) {
+            while ($row = $result_set->fetch_assoc()) {
+                $data[] = $row;
+            }
+            $result_set->free();
+        }
+        
+        // Close the statement
+        $stmt->close();
+        
+        // Don't close the connection manually - let the connection manager handle it
+        
+        return create_db_response(
+            success: true,
+            data: $data,
+            error: null,
+            error_code: null,
+            meta: $meta
+        );
+    } catch (\Exception $e) {
+        return create_db_response(
+            false,
+            null,
+            $e->getMessage(),
+            $e->getCode() ?: 'unknown_error'
+        );
+    }
+}
+
+/**
+ * Execute a MySQL prepared statement in a Lando environment
+ *
+ * @param string $query SQL query with placeholders
+ * @param array $params Array of parameter values
+ * @param array $types Array of parameter types ('s' for string, 'i' for integer, 'd' for double, 'b' for blob)
+ * @param array $db_settings Database connection settings
+ * @param string|null $db_name Optional database name
+ * @return array Standardized response array with success/error information
+ */
+function execute_mysqli_prepared_statement_lando(string $query, array $params, array $types, array $db_settings, ?string $db_name = null): array {
+    $temp_file = null;
+    $temp_php_file = null;
+    $output_file = null;
+    $error_file = null;
+
+    try {
+        // Determine which database to use based on the provided parameters
+        switch (true) {
+            case $db_name === 'none':
+                $db_to_use = 'none';  // Explicitly don't use any database
+                break;
+            case $db_name !== null:
+                $db_to_use = $db_name;  // Use the provided database name
+                break;
+            default:
+                $db_to_use = $db_settings['db_name'];  // Fall back to WordPress settings
+        }
+
+        // Validate database name if provided and not 'none'
+        if ($db_name !== 'none' && $db_name !== null && !is_valid_identifier($db_name)) {
+            return create_db_response(
+                success: false,
+                error: "Invalid database name: " . htmlspecialchars($db_to_use, ENT_QUOTES, 'UTF-8'),
+                error_code: 'invalid_db_name',
+                data: [],
+                meta: ['validation_error' => true]
+            );
+        }
+
+        // Get temporary file paths using the centralized function
+        $file_paths = get_temp_file_paths('temp_mysql_exec_');
+
+        // Extract file paths
+        $temp_php_file = $file_paths['filesystem']['php'];
+        $output_file = $file_paths['filesystem']['output'];
+        $error_file = $file_paths['filesystem']['error'];
+        $container_output_file = $file_paths['container']['output'];
+        $container_error_file = $file_paths['container']['error'];
+        $temp_file = $file_paths['temp_file']; // Store the temp file base name for reference
+
+        // Display file paths in debug mode
+        if (has_cli_flag(['--debug', '-d']) || has_cli_flag(['--verbose', '-v'])) {
+            echo "\n🔍 DEBUG: Temporary files created:\n";
+
+            // Show full paths only in debug mode, otherwise just show filenames
+            if (has_cli_flag(['--debug', '-d'])) {
+                echo "  PHP File: {$temp_php_file}\n";
+                echo "  Output File: {$output_file}\n";
+                echo "  Error File: {$error_file}\n";
+                echo "  Container Output File: {$container_output_file}\n";
+                echo "  Container Error File: {$container_error_file}\n";
+            } else {
+                echo "  PHP File: " . basename($temp_php_file) . "\n";
+                echo "  Output File: " . basename($output_file) . "\n";
+                echo "  Error File: " . basename($error_file) . "\n";
+                echo "  (Use --debug flag to see full paths)\n";
+            }
+        }
+
+        // Escape values for PHP code
+        $db_host = addslashes($db_settings['db_host']);
+        $db_user = addslashes($db_settings['db_user']);
+        $db_pass = addslashes($db_settings['db_pass']);
+
+        // Properly escape query for inclusion in PHP string
+        $escaped_query = addslashes($query);
+        
+        // Prepare parameters for PHP code
+        $params_json = json_encode($params);
+        $types_json = json_encode($types);
+
+        // Create PHP code that will execute the prepared statement and output JSON
+        $php_code = <<<EOD
+<?php
+// Disable error output to prevent corrupting JSON
+ini_set('display_errors', 0);
+ini_set('log_errors', 0);
+
+// Function to create a standardized response
+function create_db_response(\$success = true, \$data = null, \$error = null, \$error_code = null, \$meta = []) {
+    return [
+        'success' => \$success,
+        'error' => \$error,
+        'error_code' => \$error_code,
+        'data' => \$data ?? [],
+        'meta' => array_merge([
+            'affected_rows' => 0,
+            'insert_id' => 0,
+            'num_rows' => 0,
+            'warnings' => []
+        ], \$meta)
+    ];
+}
+
+// Function to write JSON to a file
+function write_json_to_file(\$data, \$file_path) {
+    \$json = json_encode(\$data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    if (\$json === false) {
+        \$json = json_encode(['success' => false, 'error' => 'JSON encoding error: ' . json_last_error_msg(), 'error_code' => 'json_encoding_failed']);
+    }
+    file_put_contents(\$file_path, \$json);
+    return \$json;
+}
+
+try {
+    // Database connection settings
+    \$db_host = '{$db_host}';
+    \$db_user = '{$db_user}';
+    \$db_pass = '{$db_pass}';
+    \$query = '{$escaped_query}';
+    \$params = {$params_json};
+    \$types = {$types_json};
+
+    // Create connection with conditional database parameter
+    \$db_to_use = '{$db_to_use}';
+    
+    // Create a direct mysqli connection
+    if (\$db_to_use === 'none') {
+        // Connect without selecting a database
+        \$mysqli = new \mysqli(\$db_host, \$db_user, \$db_pass);
+    } else {
+        // Connect with a specific database
+        \$mysqli = new \mysqli(\$db_host, \$db_user, \$db_pass, \$db_to_use);
+    }
+
+    if (\$mysqli->connect_error) {
+        \$output_file = '$container_output_file';
+        write_json_to_file(create_db_response(
+            success: false,
+            data: [],
+            error: \$mysqli->connect_error,
+            error_code: 'connection_failed',
+            meta: ['exception' => true]
+        ), \$output_file);
+        throw new Exception('Connection failed: ' . \$mysqli->connect_error, 1);
+    }
+
+    // Set proper character encoding for handling all Unicode characters including emojis
+    \$mysqli->set_charset('utf8mb4');
+
+    // Ensure proper collation for special characters
+    \$mysqli->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+    \$mysqli->query("SET CHARACTER SET utf8mb4");
+
+    // Prepare the statement
+    \$stmt = \$mysqli->prepare(\$query);
+    if (\$stmt === false) {
+        throw new Exception('Prepare failed: ' . \$mysqli->error, 2);
+    }
+    
+    // Create the type string from the types array
+    \$type_string = implode('', \$types);
+    
+    // Bind parameters
+    if (!empty(\$params)) {
+        // Create reference array for bind_param
+        \$bind_params = array(\$type_string);
+        for (\$i = 0; \$i < count(\$params); \$i++) {
+            \$bind_params[] = &\$params[\$i];
+        }
+        
+        // Call bind_param with dynamic parameters
+        call_user_func_array(array(\$stmt, 'bind_param'), \$bind_params);
+    }
+    
+    // Execute the statement
+    \$result = \$stmt->execute();
+    
+    if (\$result === false) {
+        throw new Exception('Execute failed: ' . \$stmt->error, 2);
+    }
+    
+    // Get the result
+    \$result_set = \$stmt->get_result();
+    
+    \$meta = [
+        'insert_id' => \$mysqli->insert_id,
+        'affected_rows' => \$stmt->affected_rows,
+        'num_rows' => \$result_set ? \$result_set->num_rows : 0,
+        'warnings' => []
+    ];
+    
+    \$data = [];
+    
+    // Process result set if available
+    if (\$result_set) {
+        while (\$row = \$result_set->fetch_assoc()) {
+            \$data[] = \$row;
+        }
+        \$result_set->free();
+    }
+    
+    // Close the statement
+    \$stmt->close();
+    
+    // Close the connection
+    \$mysqli->close();
+    
+    // Write JSON response to the output file
+    \$output_file = '$container_output_file';
+    \$result = write_json_to_file(create_db_response(
+        success: true,
+        data: \$data,
+        error: null,
+        error_code: null,
+        meta: \$meta
+    ), \$output_file);
+    
+} catch (Exception \$e) {
+    \$output_file = '$container_output_file';
+    write_json_to_file(create_db_response(
+        success: false,
+        data: [],
+        error: \$e->getMessage(),
+        error_code: \$e->getCode() ?: 'unknown_error',
+        meta: ['exception' => true]
+    ), \$output_file);
+}
+EOD;
+
+        // Write the PHP code to a temporary file
+        file_put_contents($temp_php_file, $php_code);
+
+        // Execute the PHP code via lando
+        $lando_command = "lando php {$temp_php_file} 2> {$container_error_file}";
+        exec($lando_command, $output, $return_code);
+
+        // Check for execution errors
+        if ($return_code !== 0) {
+            $error_message = file_exists($error_file) ? file_get_contents($error_file) : 'Unknown error executing PHP via Lando';
+            throw new \RuntimeException("Lando PHP execution failed: $error_message", 3);
+        }
+
+        // Read the output file
+        if (!file_exists($output_file)) {
+            throw new \RuntimeException("Output file not found: $output_file", 4);
+        }
+
+        $output_content = file_get_contents($output_file);
+        if ($output_content === false) {
+            throw new \RuntimeException("Failed to read output file: $output_file", 5);
+        }
+
+        // Parse the JSON response
+        $result = json_decode($output_content, true);
+        if ($result === null && json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException("Invalid JSON response: " . json_last_error_msg(), 6);
+        }
+
+        return $result;
+    } catch (\Exception $e) {
+        return create_db_response(
+            false,
+            null,
+            $e->getMessage(),
+            $e->getCode() ?: 'unknown_error'
+        );
+    } finally {
+        // Clean up temporary files
+        foreach ([$temp_php_file, $output_file, $error_file] as $file) {
+            if ($file && file_exists($file)) {
+                @unlink($file);
+            }
+        }
+    }
+}
+
+/**
+ * Execute a MySQL prepared statement with appropriate environment detection
+ *
+ * @param string $query SQL query with placeholders
+ * @param array $params Array of parameter values
+ * @param array $types Array of parameter types ('s' for string, 'i' for integer, 'd' for double, 'b' for blob)
+ * @param string|null $user Optional database username
+ * @param string|null $pass Optional database password
+ * @param string|null $host Optional database host
+ * @param string|null $db_name Optional database name
+ * @return array Standardized response array with success/error information
+ */
+function execute_mysqli_prepared_statement(string $query, array $params, array $types, ?string $user = null, ?string $pass = null, ?string $host = null, ?string $db_name = null): array {
+    global $db_settings;
+
+    // Use provided credentials or fall back to WordPress settings
+    $db_user = $user ?? $db_settings['db_user'] ?? '';
+    $db_pass = $pass ?? $db_settings['db_pass'] ?? '';
+    $db_host = $host ?? $db_settings['db_host'] ?? '';
+
+    // Check if we're in a Lando environment
+    if (is_lando_environment()) {
+        return execute_mysqli_prepared_statement_lando($query, $params, $types, $db_settings, $db_name);
+    } else {
+        return execute_mysqli_prepared_statement_direct($db_host, $db_user, $db_pass, $query, $params, $types, $db_name);
     }
 }
 
@@ -3078,7 +3650,14 @@ function debug_sql(string $sql, array $params, ?array $result = null): void {
  *                           - string: Use the specified database
  * @return array Standardized response array
  */
+
+
+
 function execute_mysqli_query(string $sql, ?string $user = null, ?string $pass = null, ?string $host = null, ?string $db_name = null): array {
+    global $query_counter;
+
+    // Increment and assign a unique query ID
+    $query_id = ++$query_counter;
     global $db_settings;
 
     // Use provided credentials or fall back to WordPress settings
@@ -3097,6 +3676,7 @@ function execute_mysqli_query(string $sql, ?string $user = null, ?string $pass =
         };
 
         $debug_info = [
+            'query_id' => "Q-{$query_id}",
             'host' => $host,
             'user' => $user,
             'database' => $db_display,
@@ -3136,6 +3716,9 @@ function execute_mysqli_query(string $sql, ?string $user = null, ?string $pass =
             'db_host' => $host
         ]), $db_name);
 
+        // Add query ID to result for reference
+        $result['query_id'] = $query_id;
+
         // Show formatted results
         display_sql_result($result);
 
@@ -3166,6 +3749,9 @@ function execute_mysqli_query(string $sql, ?string $user = null, ?string $pass =
             $db_name
         );
 
+        // Add query ID to result for reference
+        $result['query_id'] = $query_id;
+
         // Show formatted results
         display_sql_result($result);
 
@@ -3190,8 +3776,11 @@ function execute_mysqli_query(string $sql, ?string $user = null, ?string $pass =
         $db_name
     );
 
+    // Add query ID to result for reference
+    $result['query_id'] = $query_id;
+
     // Always show formatted results
-    display_sql_result($result);
+    display_sql_result($result, $query_id);
 
     // Show detailed debug info if debug is enabled
     if ($debug) {
@@ -3312,13 +3901,17 @@ $tests_passed = run_mysql_tests();
 
 // Test root user in Lando environment
 if (is_lando_environment()) {
-    colored_message("\n🔍 Testing root user in Lando environment, database root empty", 'cyan');
+    echo "\n" . str_repeat("▓", 80) . "\n";
+    colored_message("🔍 TESTING ROOT USER (EMPTY PASSWORD)", 'cyan');
+    echo str_repeat("▓", 80) . "\n";
     test_mysql_connectivity('database', 'root', '');
 }
 // Deliberately incorrect:
 // Test root user in Lando environment
 if (is_lando_environment()) {
-    colored_message("\n🔍 Testing root user in Lando environment, database root wrongpassword", 'cyan');
+    echo "\n" . str_repeat("▓", 80) . "\n";
+    colored_message("🔍 TESTING ROOT USER (WRONG PASSWORD)", 'cyan');
+    echo str_repeat("▓", 80) . "\n";
     test_mysql_connectivity('database', 'root', 'wrongpassword');
 }
 
@@ -3358,3 +3951,236 @@ if ($tests_passed === false) {
 
 colored_message("\nNote: Check the output above for detailed test results.", 'blue');
 colored_message(str_repeat("=", 80) . "\n", 'cyan');
+
+/**
+ * Add documentation about prepared statement implementation
+ */
+function add_prepared_statement_documentation(): void {
+    echo "\n";
+    colored_message(str_repeat("▓", 80), 'cyan');
+    colored_message("📚 PREPARED STATEMENT DOCUMENTATION", 'cyan');
+    colored_message(str_repeat("▓", 80), 'cyan');
+    
+    echo "\n";
+    colored_message("Why Use PHP's mysqli Prepared Statement API Instead of MySQL's PREPARE/EXECUTE Syntax:", 'yellow');
+    echo "\n";
+    
+    $benefits = [
+        "Session State Correctness" => "PHP's mysqli prepared statements maintain proper session state and connection context, avoiding issues with statement handles being lost between queries.",
+        "Type Safety" => "PHP's prepared statements handle type binding properly, ensuring integers, strings, and other data types are correctly passed to MySQL.",
+        "Security" => "PHP's implementation provides better protection against SQL injection by handling parameter binding at a lower level.",
+        "Compatibility" => "Works consistently across different MySQL versions and configurations without depending on specific MySQL server settings.",
+        "Error Handling" => "Provides better error reporting and exception handling through PHP's error system."
+    ];
+    
+    foreach ($benefits as $title => $description) {
+        colored_message("• $title:", 'green');
+        echo "  $description\n\n";
+    }
+    
+    colored_message("Implementation Notes:", 'yellow');
+    echo "\n";
+    echo "This framework provides three functions for prepared statements:\n\n";
+    echo "1. execute_mysqli_prepared_statement() - Main wrapper function that detects environment\n";
+    echo "2. execute_mysqli_prepared_statement_direct() - For direct MySQL connections\n";
+    echo "3. execute_mysqli_prepared_statement_lando() - For Lando environments\n\n";
+    
+    colored_message("Usage Example:", 'yellow');
+    echo "\n";
+    echo '$query = "INSERT INTO test_table (name, value) VALUES (?, ?)";' . "\n";
+    echo '$params = ["test_name", 42];' . "\n";
+    echo '$types = ["s", "i"];  // string, integer' . "\n";
+    echo '$result = execute_mysqli_prepared_statement($query, $params, $types);' . "\n\n";
+    
+    colored_message(str_repeat("▓", 80), 'cyan');
+}
+
+/**
+ * Run tests for prepared statement functionality
+ * 
+ * @return bool True if all tests pass, false otherwise
+ */
+function run_prepared_statement_test(): bool {
+    global $db_settings;
+    
+    $test_db = 'wordpress_test';
+    $test_table = 'prepared_statement_test';
+    $all_tests_passed = true;
+    
+    echo "\n";
+    colored_message(str_repeat("▓", 80), 'cyan');
+    colored_message("🧪 TESTING PREPARED STATEMENTS", 'cyan');
+    colored_message(str_repeat("▓", 80), 'cyan');
+    
+    // Step 1: Create test table
+    colored_message("\nStep 1: Creating test table...", 'blue');
+    
+    $create_table_sql = "DROP TABLE IF EXISTS `$test_table`;
+        CREATE TABLE `$test_table` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )";
+    
+    $result = execute_mysqli_query(sql: $create_table_sql, db_name: $test_db);
+    
+    if (!$result['success']) {
+        colored_message("❌ Failed to create test table: " . ($result['error'] ?? 'Unknown error'), 'red');
+        return false;
+    }
+    
+    colored_message("✅ Test table created successfully", 'green');
+    
+    // Step 2: Insert data using prepared statement
+    colored_message("\nStep 2: Inserting data with prepared statements...", 'blue');
+    
+    $test_data = [
+        ["Regular Name", "Regular Value"],
+        ["Name with ' apostrophe", "Value with \" quotes"],
+        ["Name with ; semicolon", "Value with -- comment"],
+        ["Special chars: ñáéíóú", "More special: 你好，世界"],
+    ];
+    
+    $insert_query = "INSERT INTO `$test_table` (name, value) VALUES (?, ?)";
+    
+    foreach ($test_data as $index => $data) {
+        $result = execute_mysqli_prepared_statement(
+            query: $insert_query,
+            params: $data,
+            types: ['s', 's'],
+            db_name: $test_db
+        );
+        
+        if (!$result['success']) {
+            colored_message("❌ Failed to insert row $index: " . ($result['error'] ?? 'Unknown error'), 'red');
+            $all_tests_passed = false;
+            continue;
+        }
+        
+        colored_message("✅ Row $index inserted successfully (ID: " . $result['meta']['insert_id'] . ")", 'green');
+    }
+    
+    // Step 3: Select data with prepared statement
+    colored_message("\nStep 3: Selecting data with prepared statements...", 'blue');
+    
+    $select_query = "SELECT * FROM `$test_table` WHERE name LIKE ?";
+    $result = execute_mysqli_prepared_statement(
+        query: $select_query,
+        params: ['%special%'],
+        types: ['s'],
+        db_name: $test_db
+    );
+    
+    if (!$result['success']) {
+        colored_message("❌ Failed to select data: " . ($result['error'] ?? 'Unknown error'), 'red');
+        $all_tests_passed = false;
+    } else {
+        colored_message("✅ Selected " . count($result['data']) . " rows with 'special' in name", 'green');
+        
+        // Display the results
+        if (!empty($result['data'])) {
+            echo "\nResults:\n";
+            echo str_repeat("-", 80) . "\n";
+            echo sprintf("%-5s %-30s %-30s %s\n", "ID", "Name", "Value", "Created At");
+            echo str_repeat("-", 80) . "\n";
+            
+            foreach ($result['data'] as $row) {
+                echo sprintf("%-5s %-30s %-30s %s\n", 
+                    $row['id'], 
+                    mb_substr($row['name'], 0, 28), 
+                    mb_substr($row['value'], 0, 28), 
+                    $row['created_at']
+                );
+            }
+            echo str_repeat("-", 80) . "\n";
+        }
+    }
+    
+    // Step 4: Update data with prepared statement
+    colored_message("\nStep 4: Updating data with prepared statements...", 'blue');
+    
+    $update_query = "UPDATE `$test_table` SET value = ? WHERE id = ?";
+    $result = execute_mysqli_prepared_statement(
+        query: $update_query,
+        params: ['Updated value with injection attempt: \'; DROP TABLE users; --', 1],
+        types: ['s', 'i'],
+        db_name: $test_db
+    );
+    
+    if (!$result['success']) {
+        colored_message("❌ Failed to update data: " . ($result['error'] ?? 'Unknown error'), 'red');
+        $all_tests_passed = false;
+    } else {
+        colored_message("✅ Updated row successfully (Affected rows: " . $result['meta']['affected_rows'] . ")", 'green');
+        
+        // Verify the update
+        $verify_query = "SELECT * FROM `$test_table` WHERE id = ?";
+        $verify_result = execute_mysqli_prepared_statement(
+            query: $verify_query,
+            params: [1],
+            types: ['i'],
+            db_name: $test_db
+        );
+        
+        if ($verify_result['success'] && !empty($verify_result['data'])) {
+            colored_message("✅ Verified update: Value is now '" . mb_substr($verify_result['data'][0]['value'], 0, 30) . "...'", 'green');
+        }
+    }
+    
+    // Step 5: Delete data with prepared statement
+    colored_message("\nStep 5: Deleting data with prepared statements...", 'blue');
+    
+    $delete_query = "DELETE FROM `$test_table` WHERE id = ?";
+    $result = execute_mysqli_prepared_statement(
+        query: $delete_query,
+        params: [2],
+        types: ['i'],
+        db_name: $test_db
+    );
+    
+    if (!$result['success']) {
+        colored_message("❌ Failed to delete data: " . ($result['error'] ?? 'Unknown error'), 'red');
+        $all_tests_passed = false;
+    } else {
+        colored_message("✅ Deleted row successfully (Affected rows: " . $result['meta']['affected_rows'] . ")", 'green');
+        
+        // Verify the deletion
+        $count_query = "SELECT COUNT(*) as total FROM `$test_table`";
+        $count_result = execute_mysqli_query(sql: $count_query, db_name: $test_db);
+        
+        if ($count_result['success'] && !empty($count_result['data'])) {
+            $remaining = $count_result['data'][0]['total'];
+            colored_message("✅ Verified deletion: $remaining rows remaining in table", 'green');
+        }
+    }
+    
+    // Final cleanup
+    colored_message("\nStep 6: Cleaning up test table...", 'blue');
+    $drop_table = execute_mysqli_query(sql: "DROP TABLE IF EXISTS `$test_table`", db_name: $test_db);
+    
+    if ($drop_table['success']) {
+        colored_message("✅ Test table dropped successfully", 'green');
+    } else {
+        colored_message("⚠️ Could not drop test table: " . ($drop_table['error'] ?? 'Unknown error'), 'yellow');
+    }
+    
+    // Summary
+    echo "\n";
+    colored_message(str_repeat("=", 80), 'cyan');
+    
+    if ($all_tests_passed) {
+        colored_message("✅ All prepared statement tests passed successfully!", 'green');
+    } else {
+        colored_message("❌ Some prepared statement tests failed!", 'red');
+    }
+    
+    colored_message(str_repeat("=", 80), 'cyan');
+    echo "\n";
+    
+    return $all_tests_passed;
+}
+
+// Run the prepared statement tests and documentation
+add_prepared_statement_documentation();
+$prepared_statement_tests_passed = run_prepared_statement_test();

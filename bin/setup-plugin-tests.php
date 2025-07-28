@@ -234,7 +234,7 @@ function check_system_requirements(string $ssh_command, array $db_settings): boo
 
     if ($mysql_return_code !== 0) {
         echo esc_cli(COLOR_RED . '❌ MySQL connection failed. Please check your database credentials and that the server is running.' . COLOR_RESET . "\n");
-        echo "Output: $return_var\n";
+        echo "Output: $mysql_return_code\n";
         $all_ok = false;
     } else {
         echo esc_cli(COLOR_GREEN . '✅ MySQL connection successful.' . COLOR_RESET . "\n");
