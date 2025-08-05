@@ -9,6 +9,7 @@ When system updates affect Docker, you may need to completely rebuild your Docke
 ### Basic Docker Cleanup
 
 First, Lando will need to be destroyed. Lando will later be rebuilt.
+Note: consider backing up the database first; lando destroy wipes the database.
 
 ```bash
 lando poweroff
@@ -73,8 +74,8 @@ lando --clear
 # Start with a fresh rebuild
 lando rebuild -y
 
-# If rebuild fails, try with a more aggressive cleanup
-lando rebuild --clean -y
+# If rebuild fails, try with debug on and a more aggressive cleanup
+LANDO_DEBUG=true lando rebuild --clean -y
 ```
 
 ## Make sure WP-CLI is Installed
@@ -174,7 +175,7 @@ Note: Have available disk space several times the size of the SQL file.
 ```bash
 lando db-import /app/path/to/wordpress.sql
 # lando db-import /app/lc-database-2025-04-19.sql
-# then lando db-export lc-2025-04-19-domain-changed.sql
+# then lando db-export lc-2025-04-19-domain-changed.sql (makes .gz)
 lando db-import lc-2025-04-19-domain-changed.sql
 ```
 
@@ -183,7 +184,7 @@ lando db-import lc-2025-04-19-domain-changed.sql
 After Lando is running properly, rebuild your Composer environment:
 
 ```bash
-# Navigate to your plugin development directory
+# Navigate to your plugin development directory 
 # (where the composer.json file is located)
 # Not your WordPress directory
 cd /path/to/yourplugin

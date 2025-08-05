@@ -2079,7 +2079,7 @@ function run_mysql_tests() {
         // This test was removed because it was unreliable due to session state issues with MySQL's native prepared statements
         // A more comprehensive test using PHP's mysqli prepared statement API has been added at the end of this file
         // See the run_prepared_statement_test() function for the new implementation
-        
+
 
         [
             'name' => '6. Error Handling',
@@ -2987,16 +2987,16 @@ function execute_mysqli_prepared_statement_direct(string $host, string $user, st
         }
 
         $mysqli->set_charset('utf8mb4');
-        
+
         // Prepare the statement
         $stmt = $mysqli->prepare($query);
         if ($stmt === false) {
             throw new \RuntimeException('Prepare failed: ' . $mysqli->error, 2, null);
         }
-        
+
         // Create the type string from the types array
         $type_string = implode('', $types);
-        
+
         // Bind parameters
         if (!empty($params)) {
             // Create reference array for bind_param
@@ -3004,30 +3004,30 @@ function execute_mysqli_prepared_statement_direct(string $host, string $user, st
             for ($i = 0; $i < count($params); $i++) {
                 $bind_params[] = &$params[$i];
             }
-            
+
             // Call bind_param with dynamic parameters
             call_user_func_array(array($stmt, 'bind_param'), $bind_params);
         }
-        
+
         // Execute the statement
         $result = $stmt->execute();
-        
+
         if ($result === false) {
             throw new \RuntimeException('Execute failed: ' . $stmt->error, 2, null);
         }
-        
+
         // Get the result
         $result_set = $stmt->get_result();
-        
+
         $meta = [
             'insert_id' => $mysqli->insert_id,
             'affected_rows' => $stmt->affected_rows,
             'num_rows' => $result_set ? $result_set->num_rows : 0,
             'warnings' => []
         ];
-        
+
         $data = [];
-        
+
         // Process result set if available
         if ($result_set) {
             while ($row = $result_set->fetch_assoc()) {
@@ -3035,12 +3035,12 @@ function execute_mysqli_prepared_statement_direct(string $host, string $user, st
             }
             $result_set->free();
         }
-        
+
         // Close the statement
         $stmt->close();
-        
+
         // Don't close the connection manually - let the connection manager handle it
-        
+
         return create_db_response(
             success: true,
             data: $data,
@@ -3135,7 +3135,7 @@ function execute_mysqli_prepared_statement_lando(string $query, array $params, a
 
         // Properly escape query for inclusion in PHP string
         $escaped_query = addslashes($query);
-        
+
         // Prepare parameters for PHP code
         $params_json = json_encode($params);
         $types_json = json_encode($types);
@@ -3184,7 +3184,7 @@ try {
 
     // Create connection with conditional database parameter
     \$db_to_use = '{$db_to_use}';
-    
+
     // Create a direct mysqli connection
     if (\$db_to_use === 'none') {
         // Connect without selecting a database
@@ -3218,10 +3218,10 @@ try {
     if (\$stmt === false) {
         throw new Exception('Prepare failed: ' . \$mysqli->error, 2);
     }
-    
+
     // Create the type string from the types array
     \$type_string = implode('', \$types);
-    
+
     // Bind parameters
     if (!empty(\$params)) {
         // Create reference array for bind_param
@@ -3229,30 +3229,30 @@ try {
         for (\$i = 0; \$i < count(\$params); \$i++) {
             \$bind_params[] = &\$params[\$i];
         }
-        
+
         // Call bind_param with dynamic parameters
         call_user_func_array(array(\$stmt, 'bind_param'), \$bind_params);
     }
-    
+
     // Execute the statement
     \$result = \$stmt->execute();
-    
+
     if (\$result === false) {
         throw new Exception('Execute failed: ' . \$stmt->error, 2);
     }
-    
+
     // Get the result
     \$result_set = \$stmt->get_result();
-    
+
     \$meta = [
         'insert_id' => \$mysqli->insert_id,
         'affected_rows' => \$stmt->affected_rows,
         'num_rows' => \$result_set ? \$result_set->num_rows : 0,
         'warnings' => []
     ];
-    
+
     \$data = [];
-    
+
     // Process result set if available
     if (\$result_set) {
         while (\$row = \$result_set->fetch_assoc()) {
@@ -3260,13 +3260,13 @@ try {
         }
         \$result_set->free();
     }
-    
+
     // Close the statement
     \$stmt->close();
-    
+
     // Close the connection
     \$mysqli->close();
-    
+
     // Write JSON response to the output file
     \$output_file = '$container_output_file';
     \$result = write_json_to_file(create_db_response(
@@ -3276,7 +3276,7 @@ try {
         error_code: null,
         meta: \$meta
     ), \$output_file);
-    
+
 } catch (Exception \$e) {
     \$output_file = '$container_output_file';
     write_json_to_file(create_db_response(
@@ -3960,11 +3960,11 @@ function add_prepared_statement_documentation(): void {
     colored_message(str_repeat("▓", 80), 'cyan');
     colored_message("📚 PREPARED STATEMENT DOCUMENTATION", 'cyan');
     colored_message(str_repeat("▓", 80), 'cyan');
-    
+
     echo "\n";
     colored_message("Why Use PHP's mysqli Prepared Statement API Instead of MySQL's PREPARE/EXECUTE Syntax:", 'yellow');
     echo "\n";
-    
+
     $benefits = [
         "Session State Correctness" => "PHP's mysqli prepared statements maintain proper session state and connection context, avoiding issues with statement handles being lost between queries.",
         "Type Safety" => "PHP's prepared statements handle type binding properly, ensuring integers, strings, and other data types are correctly passed to MySQL.",
@@ -3972,49 +3972,49 @@ function add_prepared_statement_documentation(): void {
         "Compatibility" => "Works consistently across different MySQL versions and configurations without depending on specific MySQL server settings.",
         "Error Handling" => "Provides better error reporting and exception handling through PHP's error system."
     ];
-    
+
     foreach ($benefits as $title => $description) {
         colored_message("• $title:", 'green');
         echo "  $description\n\n";
     }
-    
+
     colored_message("Implementation Notes:", 'yellow');
     echo "\n";
     echo "This framework provides three functions for prepared statements:\n\n";
     echo "1. execute_mysqli_prepared_statement() - Main wrapper function that detects environment\n";
     echo "2. execute_mysqli_prepared_statement_direct() - For direct MySQL connections\n";
     echo "3. execute_mysqli_prepared_statement_lando() - For Lando environments\n\n";
-    
+
     colored_message("Usage Example:", 'yellow');
     echo "\n";
     echo '$query = "INSERT INTO test_table (name, value) VALUES (?, ?)";' . "\n";
     echo '$params = ["test_name", 42];' . "\n";
     echo '$types = ["s", "i"];  // string, integer' . "\n";
     echo '$result = execute_mysqli_prepared_statement($query, $params, $types);' . "\n\n";
-    
+
     colored_message(str_repeat("▓", 80), 'cyan');
 }
 
 /**
  * Run tests for prepared statement functionality
- * 
+ *
  * @return bool True if all tests pass, false otherwise
  */
 function run_prepared_statement_test(): bool {
     global $db_settings;
-    
+
     $test_db = 'wordpress_test';
     $test_table = 'prepared_statement_test';
     $all_tests_passed = true;
-    
+
     echo "\n";
     colored_message(str_repeat("▓", 80), 'cyan');
     colored_message("🧪 TESTING PREPARED STATEMENTS", 'cyan');
     colored_message(str_repeat("▓", 80), 'cyan');
-    
+
     // Step 1: Create test table
     colored_message("\nStep 1: Creating test table...", 'blue');
-    
+
     $create_table_sql = "DROP TABLE IF EXISTS `$test_table`;
         CREATE TABLE `$test_table` (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -4022,28 +4022,28 @@ function run_prepared_statement_test(): bool {
             value TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )";
-    
+
     $result = execute_mysqli_query(sql: $create_table_sql, db_name: $test_db);
-    
+
     if (!$result['success']) {
         colored_message("❌ Failed to create test table: " . ($result['error'] ?? 'Unknown error'), 'red');
         return false;
     }
-    
+
     colored_message("✅ Test table created successfully", 'green');
-    
+
     // Step 2: Insert data using prepared statement
     colored_message("\nStep 2: Inserting data with prepared statements...", 'blue');
-    
+
     $test_data = [
         ["Regular Name", "Regular Value"],
         ["Name with ' apostrophe", "Value with \" quotes"],
         ["Name with ; semicolon", "Value with -- comment"],
         ["Special chars: ñáéíóú", "More special: 你好，世界"],
     ];
-    
+
     $insert_query = "INSERT INTO `$test_table` (name, value) VALUES (?, ?)";
-    
+
     foreach ($test_data as $index => $data) {
         $result = execute_mysqli_prepared_statement(
             query: $insert_query,
@@ -4051,19 +4051,19 @@ function run_prepared_statement_test(): bool {
             types: ['s', 's'],
             db_name: $test_db
         );
-        
+
         if (!$result['success']) {
             colored_message("❌ Failed to insert row $index: " . ($result['error'] ?? 'Unknown error'), 'red');
             $all_tests_passed = false;
             continue;
         }
-        
+
         colored_message("✅ Row $index inserted successfully (ID: " . $result['meta']['insert_id'] . ")", 'green');
     }
-    
+
     // Step 3: Select data with prepared statement
     colored_message("\nStep 3: Selecting data with prepared statements...", 'blue');
-    
+
     $select_query = "SELECT * FROM `$test_table` WHERE name LIKE ?";
     $result = execute_mysqli_prepared_statement(
         query: $select_query,
@@ -4071,35 +4071,35 @@ function run_prepared_statement_test(): bool {
         types: ['s'],
         db_name: $test_db
     );
-    
+
     if (!$result['success']) {
         colored_message("❌ Failed to select data: " . ($result['error'] ?? 'Unknown error'), 'red');
         $all_tests_passed = false;
     } else {
         colored_message("✅ Selected " . count($result['data']) . " rows with 'special' in name", 'green');
-        
+
         // Display the results
         if (!empty($result['data'])) {
             echo "\nResults:\n";
             echo str_repeat("-", 80) . "\n";
             echo sprintf("%-5s %-30s %-30s %s\n", "ID", "Name", "Value", "Created At");
             echo str_repeat("-", 80) . "\n";
-            
+
             foreach ($result['data'] as $row) {
-                echo sprintf("%-5s %-30s %-30s %s\n", 
-                    $row['id'], 
-                    mb_substr($row['name'], 0, 28), 
-                    mb_substr($row['value'], 0, 28), 
+                echo sprintf("%-5s %-30s %-30s %s\n",
+                    $row['id'],
+                    mb_substr($row['name'], 0, 28),
+                    mb_substr($row['value'], 0, 28),
                     $row['created_at']
                 );
             }
             echo str_repeat("-", 80) . "\n";
         }
     }
-    
+
     // Step 4: Update data with prepared statement
     colored_message("\nStep 4: Updating data with prepared statements...", 'blue');
-    
+
     $update_query = "UPDATE `$test_table` SET value = ? WHERE id = ?";
     $result = execute_mysqli_prepared_statement(
         query: $update_query,
@@ -4107,13 +4107,13 @@ function run_prepared_statement_test(): bool {
         types: ['s', 'i'],
         db_name: $test_db
     );
-    
+
     if (!$result['success']) {
         colored_message("❌ Failed to update data: " . ($result['error'] ?? 'Unknown error'), 'red');
         $all_tests_passed = false;
     } else {
         colored_message("✅ Updated row successfully (Affected rows: " . $result['meta']['affected_rows'] . ")", 'green');
-        
+
         // Verify the update
         $verify_query = "SELECT * FROM `$test_table` WHERE id = ?";
         $verify_result = execute_mysqli_prepared_statement(
@@ -4122,15 +4122,15 @@ function run_prepared_statement_test(): bool {
             types: ['i'],
             db_name: $test_db
         );
-        
+
         if ($verify_result['success'] && !empty($verify_result['data'])) {
             colored_message("✅ Verified update: Value is now '" . mb_substr($verify_result['data'][0]['value'], 0, 30) . "...'", 'green');
         }
     }
-    
+
     // Step 5: Delete data with prepared statement
     colored_message("\nStep 5: Deleting data with prepared statements...", 'blue');
-    
+
     $delete_query = "DELETE FROM `$test_table` WHERE id = ?";
     $result = execute_mysqli_prepared_statement(
         query: $delete_query,
@@ -4138,46 +4138,46 @@ function run_prepared_statement_test(): bool {
         types: ['i'],
         db_name: $test_db
     );
-    
+
     if (!$result['success']) {
         colored_message("❌ Failed to delete data: " . ($result['error'] ?? 'Unknown error'), 'red');
         $all_tests_passed = false;
     } else {
         colored_message("✅ Deleted row successfully (Affected rows: " . $result['meta']['affected_rows'] . ")", 'green');
-        
+
         // Verify the deletion
         $count_query = "SELECT COUNT(*) as total FROM `$test_table`";
         $count_result = execute_mysqli_query(sql: $count_query, db_name: $test_db);
-        
+
         if ($count_result['success'] && !empty($count_result['data'])) {
             $remaining = $count_result['data'][0]['total'];
             colored_message("✅ Verified deletion: $remaining rows remaining in table", 'green');
         }
     }
-    
+
     // Final cleanup
     colored_message("\nStep 6: Cleaning up test table...", 'blue');
     $drop_table = execute_mysqli_query(sql: "DROP TABLE IF EXISTS `$test_table`", db_name: $test_db);
-    
+
     if ($drop_table['success']) {
         colored_message("✅ Test table dropped successfully", 'green');
     } else {
         colored_message("⚠️ Could not drop test table: " . ($drop_table['error'] ?? 'Unknown error'), 'yellow');
     }
-    
+
     // Summary
     echo "\n";
     colored_message(str_repeat("=", 80), 'cyan');
-    
+
     if ($all_tests_passed) {
         colored_message("✅ All prepared statement tests passed successfully!", 'green');
     } else {
         colored_message("❌ Some prepared statement tests failed!", 'red');
     }
-    
+
     colored_message(str_repeat("=", 80), 'cyan');
     echo "\n";
-    
+
     return $all_tests_passed;
 }
 
