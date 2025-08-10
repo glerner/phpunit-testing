@@ -803,11 +803,14 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_direct')) {
                 }
 
                 // Process result set if available
+                $had_rows = false;
+                $rows_before = count($data);
                 if ($result = $mysqli->store_result()) {
                     while ($row = $result->fetch_assoc()) {
                         $data[] = $row;
                     }
                     $meta['num_rows'] = $result->num_rows;
+                    $had_rows = ($result->num_rows > 0);
 
                     // Debug output for successful result set
                     if ($debug) {
@@ -829,12 +832,14 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_direct')) {
                     'affected_rows' => $mysqli->affected_rows,
                     'insert_id' => $mysqli->insert_id,
                     'error' => $mysqli->error ?: null,
-                    'statement_type' => $mysqli->field_count ? 'query' : 'non-query'
+                    'statement_type' => ($had_rows ? 'query' : 'non-query')
                 ];
 
+            // @phpstan-ignore-next-line - runtime-controlled multi-statement iteration
             } while (!$has_error && $mysqli->more_results() && $mysqli->next_result());
 
             // Final error check after all statements
+            // @phpstan-ignore-next-line - defensive check for late errors
             if ($mysqli->error && !$has_error) {
                 $error_message = 'Query failed after processing: ' . $mysqli->error;
 
@@ -1332,7 +1337,20 @@ if (!function_exists('WP_PHPUnit_Framework\format_mysql_execution')) {
     }
 }
 
-
+if (!function_exists('WP_PHPUnit_Framework\is_valid_identifier')) {
+    /**
+     * Validate MySQL identifier (database, table, or column name)
+     *
+     * @param string $name The identifier to validate
+     * @return bool True if valid, false otherwise
+     */
+    function is_valid_identifier(string $name): bool {
+        // MySQL allows letters, numbers, underscore, and dollar sign
+        // Must start with a letter or underscore
+        // Length between 1 and 64 characters
+        return (bool)preg_match('/^[a-zA-Z_][a-zA-Z0-9_$]{0,63}$/', $name);
+    }
+}
 
 if (!function_exists('WP_PHPUnit_Framework\execute_mysql_via_ssh')) {
     /**
@@ -1472,9 +1490,7 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysql_via_ssh')) {
             if ($return_var !== 0) {
                 throw new \RuntimeException(
                     "SSH command failed with code $return_var: " . $output_str,
-                    $return_var,
-                    null,
-                    'ssh_command_failed'
+                    $return_var
                 );
             }
 
@@ -1489,10 +1505,11 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysql_via_ssh')) {
 
             // For SELECT queries, parse the output
             if (stripos(trim($sql), 'SELECT') === 0) {
-                $lines = explode("\n", trim($output_str));
-                if (!empty($lines)) {
+                $trimmed = trim($output_str);
+                if ($trimmed !== '') {
+                    $lines = explode("\n", $trimmed);
                     $headers = str_getcsv($lines[0], "\t");
-                    $meta['num_rows'] = count($lines) - 1; // Subtract header row
+                    $meta['num_rows'] = max(count($lines) - 1, 0); // Subtract header row safely
 
                     for ($i = 1; $i < count($lines); $i++) {
                         $values = str_getcsv($lines[$i], "\t");
@@ -2071,19 +2088,17 @@ EOD;
             $view->display_message(str_repeat('-', 80), 'cyan');
 
             // Check PHP syntax of the temporary file
-            if (has_cli_flag(['--debug', '-d'])) {
-                $view->display_message("\n🔍 DEBUG: Checking PHP syntax...", 'cyan');
-                $output = [];
-                $return_var = 0;
-                exec("php -l " . escapeshellarg($temp_php_file) . " 2>&1", $output, $return_var);
+            $view->display_message("\n🔍 DEBUG: Checking PHP syntax...", 'cyan');
+            $output = [];
+            $return_var = 0;
+            exec("php -l " . escapeshellarg($temp_php_file) . " 2>&1", $output, $return_var);
 
-                if ($return_var === 0) {
-                    $view->display_message("✅ PHP syntax is valid", 'green');
-                } else {
-                    $view->display_message("❌ PHP syntax error:", 'red');
-                    foreach ($output as $line) {
-                        $view->display_message("  $line", 'red');
-                    }
+            if ($return_var === 0) {
+                $view->display_message("✅ PHP syntax check passed", 'green');
+            } else {
+                $view->display_message("❌ PHP syntax check failed:", 'red');
+                foreach ($output as $line) {
+                    $view->display_message("  $line", 'red');
                 }
             }
         }
@@ -2190,11 +2205,7 @@ EOD;
  * This file contains the execute_mysqli_query function to be added to framework-database-functions.php
  */
 
-namespace WP_PHPUnit_Framework;
-
-use WP_PHPUnit_Framework\View\Database_Test_View;
-
-if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_query')) {
+if (!function_exists('WP_PHPUnit_Framework\\execute_mysqli_query')) {
     /**
      * Execute a MySQL query using the appropriate method based on environment
      *
@@ -2276,7 +2287,7 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_query')) {
                 'db_user' => $user,
                 'db_pass' => $pass,
                 'db_host' => $host
-            ]), $db_name, $view);
+            ]), $db_name);
 
             // Add query ID to result for reference
             $result['query_id'] = $query_id;
@@ -2365,9 +2376,47 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_query')) {
  * This file contains the execute_mysqli_prepared_statement function to be added to framework-database-functions.php
  */
 
-namespace WP_PHPUnit_Framework;
-
-use WP_PHPUnit_Framework\View\Database_Test_View;
+/**
+ * PREPARED STATEMENT DOCUMENTATION
+ * ===============================
+ *
+ * Why Use PHP's mysqli Prepared Statement API Instead of MySQL's PREPARE/EXECUTE Syntax:
+ * -------------------------------------------------------------------------------
+ *
+ * • Session State Correctness:
+ *   PHP's mysqli prepared statements maintain proper session state and connection context,
+ *   avoiding issues with statement handles being lost between queries.
+ *
+ * • Type Safety:
+ *   PHP's prepared statements handle type binding properly, ensuring integers, strings,
+ *   and other data types are correctly passed to MySQL.
+ *
+ * • Security:
+ *   PHP's implementation provides better protection against SQL injection by handling
+ *   parameter binding at a lower level.
+ *
+ * • Compatibility:
+ *   Works consistently across different MySQL versions and configurations without
+ *   depending on specific MySQL server settings.
+ *
+ * • Error Handling:
+ *   Provides better error reporting and exception handling through PHP's error system.
+ *
+ * Implementation Notes:
+ * -------------------
+ * This framework provides three functions for prepared statements:
+ *
+ * 1. execute_mysqli_prepared_statement() - Main wrapper function that detects environment
+ * 2. execute_mysqli_prepared_statement_direct() - For direct MySQL connections (only called by main wrapper)
+ * 3. execute_mysqli_prepared_statement_lando() - For Lando environments (only called by main wrapper)
+ *
+ * Usage Example:
+ * -------------
+ * $query = "INSERT INTO test_table (name, value) VALUES (?, ?)";
+ * $params = ["test_name", 42];
+ * $types = ["s", "i"];  // string, integer
+ * $result = execute_mysqli_prepared_statement($query, $params, $types);
+ */
 
 if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_prepared_statement')) {
     /**
@@ -2423,10 +2472,6 @@ if (!function_exists('WP_PHPUnit_Framework\execute_mysqli_prepared_statement')) 
  *
  * This file contains the test_mysql_connectivity function to be added to framework-database-functions.php
  */
-
-namespace WP_PHPUnit_Framework;
-
-use WP_PHPUnit_Framework\View\Database_Test_View;
 
 if (!function_exists('WP_PHPUnit_Framework\test_mysql_connectivity')) {
     /**

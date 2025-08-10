@@ -21,7 +21,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 * Validate MySQL host parameter.
 		 *
 		 * @param string $host
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_host( $host ) {
 			if ( ! is_string( $host ) || $host === '' ) {
@@ -38,7 +38,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 * Validate MySQL user parameter.
 		 *
 		 * @param string $user
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_user( $user ) {
 			if ( ! is_string( $user ) || $user === '' ) {
@@ -55,7 +55,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 * Validate MySQL password parameter.
 		 *
 		 * @param string $password
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_password( $password ) {
 			if ( ! is_string( $password ) ) {
@@ -72,7 +72,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 * Validate MySQL database parameter.
 		 *
 		 * @param string $database
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_database( $database ) {
 			if ( ! is_string( $database ) || $database === '' ) {
@@ -90,7 +90,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 *
 		 * @param string $sql
 		 * @param string $mode 'api' (default) for DB API, 'shell' for shell commands
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_sql( $sql, $mode = 'api' ) {
 			if ( ! is_string( $sql ) || trim( $sql ) === '' ) {
@@ -114,7 +114,7 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 *
 		 * @param array $params ['host' => ..., 'user' => ..., 'password' => ..., 'database' => ..., 'sql' => ...]
 		 * @param string $mode 'api' or 'shell'
-		 * @return true|WP_Error
+		 * @return true|\WP_Error
 		 */
 		public static function validate_all( $params, $mode = 'api' ) {
 			foreach ( [ 'host', 'user', 'password', 'database', 'sql' ] as $key ) {
@@ -133,8 +133,8 @@ if ( ! class_exists( 'MySQL_Parameter_Validator' ) ) {
 		 * Return WP_Error if available, else throw Exception.
 		 *
 		 * @param string $message
-		 * @return WP_Error|void
-		 * @throws Exception
+		 * @return \WP_Error|void
+		 * @throws \Exception
 		 */
 		protected static function error_or_throw( $message ) {
 			if ( function_exists( 'is_wp_error' ) && class_exists( 'WP_Error' ) ) {

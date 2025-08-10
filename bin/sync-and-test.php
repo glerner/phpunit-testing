@@ -76,7 +76,6 @@ use function WP_PHPUnit_Framework\get_cli_value;
 use function WP_PHPUnit_Framework\get_setting;
 use function WP_PHPUnit_Framework\has_cli_flag;
 use function WP_PHPUnit_Framework\is_lando_environment;
-use function WP_PHPUnit_Framework\log;
 // Set default timezone to avoid warnings
 date_default_timezone_set('UTC');
 
@@ -469,6 +468,9 @@ function check_phpunit_exists($test_run_path, $your_plugin_dest, $targeting_land
 }
 
 // Execute tests based on the selected type
+// Default return code for later summary
+$phpunit_return = 0;
+
 if ($options['unit']) {
     // Run unit tests
     colored_message("Running unit tests...", 'blue');
@@ -520,6 +522,9 @@ if ($options['unit']) {
 
 	colored_message("\nAll test suites completed successfully! 🎉", 'green');
 
+	// Reflect overall success in the summary exit code
+	$phpunit_return = 0;
+
 	// Skip the regular PHPUnit execution since we've already run all test types
 	exit(0);
 }
@@ -530,7 +535,7 @@ if ($phpunit_return === 0) {
 
 	// Show coverage report path if generated
 	if ($options['coverage']) {
-		$coverage_path = $plugin_dest . '/build/coverage/index.html';
+		$coverage_path = $your_plugin_dest . '/build/coverage/index.html';
 		colored_message("Code coverage report is available at:", 'blue');
 		colored_message($coverage_path, 'yellow');
 		colored_message("You can view this report by opening it in a web browser.", 'blue');

@@ -168,7 +168,7 @@
    When requesting code generation, specify:
    ```
    Follow these naming conventions:
-   - Class files: PSR-4 Pascal_Case matching class name (e.g., `Journey_Questions_Model.php`)
+   - Class files: PSR-4 Pascal_Case matching class name (e.g., `Journey_Questions_Model.php` important so test files load the classes properly)
    - Test files: WordPress kebab-case (e.g., `test-journey-questions.php`)
    - Non-PHP files: kebab-case (e.g., `admin-styles.css`)
    ```

@@ -119,6 +119,8 @@ set_exception_handler(
  * @return mixed Setting value
  */
 function get_setting( string $name, mixed $default = null ): mixed {
+    // Default error log file for this function
+    $error_log_file = '/tmp/phpunit-testing.log';
     // Create a debug log file for tracking get_setting calls
     $debug_log_file = '/tmp/phpunit-get-setting-debug.log';
 
@@ -155,9 +157,6 @@ function get_setting( string $name, mixed $default = null ): mixed {
     /* Don't recursively set, if there is an error
     $error_log_file = get_setting('TEST_ERROR_LOG', '/tmp/phpunit-testing.log');
     */
-    if (!isset($error_log_file)) {
-        $error_log_file = '/tmp/phpunit-testing.log';
-    }
 
     // Silently log critical setting issues to error log without screen output
     if (($name === 'WP_ROOT' || $name === 'FILESYSTEM_WP_ROOT' || $name === 'WP_TESTS_DB_NAME')) {
@@ -256,194 +255,6 @@ function find_project_root(string $start_dir, string $marker = 'composer.json'):
     return null;
 }
 
-
-/**
- * Retrieves WordPress database connection settings from multiple sources in a specific priority order.
- * Its purpose is to determine the database settings (host, user, password, name, and table prefix)
- * that should be used for WordPress plugin testing.
- *
- * Priority Order:
- * 1. wp-config.php (lowest priority)
- * 2. Config file (.env.testing by default)
- * 3. Environment variables
- * 4. Lando configuration (highest priority)
- *
- * Note: The table_prefix is only read by WordPress from wp-config.php and cannot be overridden.
- *
- * @param string $wp_config_path Path to WordPress configuration file
- * @param array  $lando_info Lando environment configuration, obtained by executing 'lando info' command
- * @paramls string $config_file_name Name of the configuration file (default: '.env.testing')
- * @return array Database settings with keys: db_host, db_user, db_pass, db_name, table_prefix
- * @throws \Exception If wp-config.php doesn't exist or if any required database settings are missing.
- */
-function get_database_settings(
-    string $wp_config_path,
-    array $lando_info = array(),
-    string $config_file_name = '.env.testing'
-): array {
-    // Initialize with not set values
-    $db_settings = array(
-        'db_host' => '[not set]',
-        'db_user' => '[not set]',
-        'db_pass' => '[not set]',
-        'db_name' => '[not set]',
-        'table_prefix' => 'wp_', // Default WordPress table prefix
-    );
-
-    // 1. Load from wp-config.php (lowest priority)
-    if (file_exists($wp_config_path)) {
-        colored_message("Reading database settings from $wp_config_path");
-
-        $temp_config_path = tempnam(sys_get_temp_dir(), 'wp_config_');
-        $config_content = file_get_contents($wp_config_path);
-        if ($config_content === false) {
-            throw new \Exception("Could not read wp-config.php at $wp_config_path");
-        }
-
-        // Safely extract only DB definitions and table_prefix to avoid loading all of WordPress
-        $pattern = "/(define\s*\(\s*['\"](DB_NAME|DB_USER|DB_PASSWORD|DB_HOST)['\"].*?;|\$table_prefix\s*=\s*['\"].*?['\"];)/m";
-        preg_match_all($pattern, $config_content, $matches);
-
-        if (!empty($matches[0])) {
-            $temp_content = "<?php\n" . implode("\n", $matches[0]);
-            file_put_contents($temp_config_path, $temp_content);
-
-            try {
-                // Include the temporary, sanitized config file
-                @include $temp_config_path;
-
-                // Get the database settings from the constants
-                if (defined('DB_NAME')) {
-                    $db_settings['db_name'] = DB_NAME;
-                }
-                if (defined('DB_USER')) {
-                    $db_settings['db_user'] = DB_USER;
-                }
-                if (defined('DB_PASSWORD')) {
-                    $db_settings['db_pass'] = DB_PASSWORD;
-                }
-                if (defined('DB_HOST')) {
-                    $db_settings['db_host'] = DB_HOST;
-                }
-
-                // Get the table prefix from the global variable
-                if (isset($table_prefix)) {
-                    $db_settings['table_prefix'] = $table_prefix;
-                }
-
-            } catch (\Exception $e) {
-                colored_message("Warning: Error including temporary config file: {$e->getMessage()}", 'yellow');
-            } finally {
-                // Clean up the temporary file
-                unlink($temp_config_path);
-            }
-        } else {
-             colored_message("Warning: Could not find DB settings in $wp_config_path . Check wp-config.php format.", 'yellow');
-        }
-    }
-
-    // 2. Load from config file (e.g., .env, .env.testing)
-    $env_file_db_host = get_setting('WP_TESTS_DB_HOST', null);
-    $env_file_db_user = get_setting('WP_TESTS_DB_USER', null);
-    $env_file_db_pass = get_setting('WP_TESTS_DB_PASSWORD', null);
-    $env_file_db_name = get_setting('WP_TESTS_DB_NAME', null);
-
-    if ($env_file_db_host) {
-		$db_settings['db_host'] = $env_file_db_host;
-    }
-    if ($env_file_db_user) {
-		$db_settings['db_user'] = $env_file_db_user;
-    }
-    if ($env_file_db_pass !== null) {
-		$db_settings['db_pass'] = $env_file_db_pass; // Password can be empty
-    }
-    if ($env_file_db_name) {
-		$db_settings['db_name'] = $env_file_db_name;
-    }
-    // Note: table_prefix is only read from wp-config.php and not from environment variables or config files
-
-    // 3. Load from environment variables
-    $env_var_db_host = getenv('WP_TESTS_DB_HOST');
-    $env_var_db_user = getenv('WP_TESTS_DB_USER');
-    $env_var_db_pass = getenv('WP_TESTS_DB_PASSWORD');
-    $env_var_db_name = getenv('WP_TESTS_DB_NAME');
-
-    if ($env_var_db_host !== false && $env_var_db_host) {
-		$db_settings['db_host'] = $env_var_db_host;
-    }
-    if ($env_var_db_user !== false && $env_var_db_user) {
-		$db_settings['db_user'] = $env_var_db_user;
-    }
-    if ($env_var_db_pass !== false) {
-		$db_settings['db_pass'] = $env_var_db_pass; // Password can be empty
-    }
-    if ($env_var_db_name !== false && $env_var_db_name) {
-		$db_settings['db_name'] = $env_var_db_name;
-    }
-
-    // Note: table_prefix is only read from wp-config.php and not from environment variables
-
-    // 4. Load from Lando configuration (highest priority)
-    if (!empty($lando_info)) {
-        colored_message('Getting Lando internal configuration...');
-
-        // Find the database service
-        $db_service = null;
-        foreach ($lando_info as $service_name => $service_info) {
-            if (isset($service_info['type']) && $service_info['type'] === 'mysql') {
-                $db_service = $service_info;
-                break;
-            }
-        }
-
-        // If we found a database service, use its credentials
-        if ($db_service !== null && isset($db_service['creds'])) {
-            $creds = $db_service['creds'];
-
-            // In Lando, we trust the Lando configuration completely
-            if (isset($db_service['internal_connection']['host'])) {
-                $db_settings['db_host'] = $db_service['internal_connection']['host'];
-            }
-            if (isset($creds['user'])) {
-                $db_settings['db_user'] = $creds['user'];
-            }
-            if (isset($creds['password'])) {
-                $db_settings['db_pass'] = $creds['password'];
-            }
-            if (isset($creds['database'])) {
-                $db_settings['db_name'] = $creds['database'];
-            }
-
-            colored_message("Found Lando database service: {$db_settings['db_host']}");
-            // Note: table_prefix is only read from wp-config.php and not from Lando configuration
-        } else {
-            colored_message('Warning: No MySQL service found in Lando configuration.', 'yellow');
-            colored_message('This indicates a potential issue with your Lando setup.');
-        }
-    }
-
-    // Check if we have all required settings
-    $missing_settings = array();
-    foreach ($db_settings as $key => $value) {
-        if ($value === '[not set]') {
-            $missing_settings[] = strtoupper($key);
-        }
-    }
-
-    if (!empty($missing_settings)) {
-        $missing_str = implode(', ', $missing_settings);
-        throw new \Exception("Missing required database settings: $missing_str. Please configure these in your .env.testing file or wp-config.php.");
-    }
-
-    // Display the final settings
-    // echo esc_cli("WordPress Database settings:\n");
-    // echo esc_cli("- Host: {$db_settings['db_host']}\n");
-    // echo esc_cli("- User: {$db_settings['db_user']}\n");
-    // echo esc_cli("- Database: {$db_settings['db_name']}\n");
-    // echo esc_cli('- Password length: ' . strlen($db_settings['db_pass']) . "\n");
-
-    return $db_settings;
-}
 
 /**
  * Displays instructions for running tests via Composer and the sync script.
@@ -980,7 +791,11 @@ function get_lando_info(): array {
         return array();
     }
 
-    colored_message( 'Found Lando configuration.', 'green' );
+    // Keep get_lando_info quiet (no general output). Use debug only if needed.
+    if (has_cli_flag(['--debug'])) {
+        colored_message('Debug: Parsed Lando configuration loaded.', 'blue');
+    }
+
     return $lando_info;
 }
 

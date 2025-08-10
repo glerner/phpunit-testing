@@ -160,9 +160,7 @@ colored_message("==== Started sync-to-wp main() =====\n");
 
     if ($return_var !== 0) {
         colored_message("Error syncing project files. rsync exited with code $return_var", 'red');
-        if (!empty($output)) {
-            colored_message("rsync output:\n" . implode("\n", $output), 'yellow');
-        }
+        colored_message("See rsync's output above for details.", 'yellow');
         exit($return_var);
     }
 
